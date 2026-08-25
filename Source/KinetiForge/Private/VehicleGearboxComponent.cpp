@@ -128,6 +128,9 @@ void UVehicleGearboxComponent::UpdateInputShaft(
 )
 {
 	OutClutchVelocity = InAxleVelocity * CurrentGearRatio;
+	// [previs AM-5 instrumentation patch] cache shaft speeds for read-only exposure
+	LastInputShaftSpeed = OutClutchVelocity;
+	LastOutputShaftSpeed = InAxleVelocity;
 	const float GearRatioSquareInv = UVehicleUtilities::SafeDivide(1.f, CurrentGearRatio * CurrentGearRatio);
 	OutReflectedInertia = InAxleInertia * GearRatioSquareInv;
 	OutReflectedDriveShaftStiffness = InDriveShaftStiffness * GearRatioSquareInv;

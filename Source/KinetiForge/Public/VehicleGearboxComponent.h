@@ -11,6 +11,19 @@ DECLARE_DYNAMIC_DELEGATE(FOnShiftFinishedDelegate);
 
 class UVehicleAxleAssemblyComponent;
 
+// [previs AM-5 instrumentation patch] Read-only snapshot of the gearbox shift machine, taken in
+// one call so a reader outside the physics window cannot tear across five separate getters.
+// Adds no behaviour: every field is assembled from state the gearbox already keeps.
+struct FVehicleGearboxShiftState
+{
+	int32 CurrentGear = 0;		// during a shift this is still the START gear; FinalizeShift moves it
+	int32 TargetGear = 0;		// 0 when no shift is in flight
+	int32 Direction = 0;		// +1 up, -1 down, 0 not shifting
+	bool bInProgress = false;	// !bIsInGear
+	bool bSparkCut = false;		// sequential upshift torque cut window, read not estimated
+	bool bRevMatch = false;		// downshift blip window, read not estimated
+};
+
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent), BlueprintType, Blueprintable)
 class KINETIFORGE_API UVehicleGearboxComponent : public UActorComponent
 {
@@ -116,4 +129,28 @@ public:
 	bool IsGearDataDirty();
 	bool GetShouldRevMatch() { return bShouldRevMatch; }
 	bool GetShouldCutSpark() { return bShouldCutSpark; }
+
+	// [previs AM-5 instrumentation patch] Read-only exposure; no behaviour change.
+	int32 GetTargetGear() { return TargetGear; }
+	float GetInputShaftSpeed() { return LastInputShaftSpeed; }		// clutch side, rad/s
+	float GetOutputShaftSpeed() { return LastOutputShaftSpeed; }	// axle side, rad/s
+	FVehicleGearboxShiftState GetShiftState()
+	{
+		FVehicleGearboxShiftState State;
+		State.CurrentGear = CurrentGear;
+		State.TargetGear = TargetGear;
+		State.bInProgress = !bIsInGear;
+		if (!bIsInGear)
+		{
+			State.Direction = FMath::Abs(TargetGear) > FMath::Abs(CurrentGear) ? 1 : -1;
+		}
+		State.bSparkCut = bShouldCutSpark;
+		State.bRevMatch = bShouldRevMatch;
+		return State;
+	}
+
+private:
+	// [previs AM-5 instrumentation patch] Cached by UpdateInputShaft each call; read-only outside.
+	float LastInputShaftSpeed = 0.f;
+	float LastOutputShaftSpeed = 0.f;
 };
