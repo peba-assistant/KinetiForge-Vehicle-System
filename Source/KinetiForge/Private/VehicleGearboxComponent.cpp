@@ -235,6 +235,19 @@ bool UVehicleGearboxComponent::CalculateGearRatios(TArray<float>& LargerArray, T
 	return true;
 }
 
+bool UVehicleGearboxComponent::SetExplicitGearRatios(const TArray<float>& ForwardRatios, const TArray<float>& ReverseRatios)
+{
+	// The config stays exactly what SetConfig wrote (a read-back audit compares it); only the
+	// ratio arrays change, and only when the source states one ratio per configured gear.
+	if (ForwardRatios.Num() != Config.NumberOfGears || ReverseRatios.Num() != Config.NumOfReverseGears) return false;
+	CalculateGearRatios();	// refreshes the dirty-check cache so the explicit arrays are not recomputed away
+	GearRatios = ForwardRatios;
+	for (float& R : GearRatios) R = FMath::Abs(R);
+	ReverseGearRatios = ReverseRatios;
+	for (float& R : ReverseGearRatios) R = -FMath::Abs(R);
+	return true;
+}
+
 bool UVehicleGearboxComponent::IsGearDataDirty()
 {
 	//check if gearratios has to be calculated again

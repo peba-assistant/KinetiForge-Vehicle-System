@@ -127,6 +127,11 @@ public:
 	bool CalculateGearRatios(TArray<float>& LargerArray, TArray<float>& SmallerArray, bool bInverseSign = false);
 
 	bool IsGearDataDirty();
+	//: Previs (2026-09-02): the source's own per-gear ratios, exact. KinetiForge synthesises the
+	//: intermediates from first/top/bias; a vehicle that states every ratio hands them over here,
+	//: after SetConfig, and the cached first/top/bias/count keep IsGearDataDirty() false.
+	UFUNCTION(BlueprintCallable, Category = "VehicleGearbox")
+	bool SetExplicitGearRatios(const TArray<float>& ForwardRatios, const TArray<float>& ReverseRatios);
 	bool GetShouldRevMatch() { return bShouldRevMatch; }
 	bool GetShouldCutSpark() { return bShouldCutSpark; }
 
