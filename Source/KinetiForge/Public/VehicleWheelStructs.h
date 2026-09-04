@@ -69,6 +69,41 @@ struct KINETIFORGE_API FVehicleTireConfig
 	float WheelLoadInfluenceFactor = 0.8f;
 
 	/**
+	* TYRE LOAD SENSITIVITY, in PROJECT CHRONO'S OWN SHAPE (ADR-031, 2026-09-04).
+	*
+	* A tyre's friction coefficient falls as its vertical load rises. Chrono is the larger and more
+	* precise model, so its implementation is the one this extension carries, and every source is
+	* mapped INTO it rather than each bringing its own curve (owner, 2026-09-04: "let chrono decide
+	* how the implementation is done, so we have the larger more precise model as reference point").
+	* One shape means a tyre is the same two numbers in both simulators, which is what makes a car
+	* replicable across them.
+	*
+	* Chrono (ChTMeasyTire) states a tyre's peak force at a nominal load pn and again at 2 pn, and
+	* interpolates quadratically between them through the origin (its InterpQ):
+	*     q     = clamp(Fz, 0, 3.5 pn) / pn
+	*     scale = q * (2 - r/2 - (1 - r/2) * q)      with r = force(2pn) / force(pn)
+	*     force = mu_ref * pn * scale
+	* which is exactly force(pn) at q = 1 and force(2pn) at q = 2, and 0 at no load. The 3.5 pn
+	* clamp is Chrono's own pn_max. The Fx/Fy curve already carries mu_ref as its peak, so what
+	* lives here is the load term alone.
+	*
+	* r is the whole of the load sensitivity in one number. r = 2 is a tyre that never loses grip
+	* with load; every real tyre is below it. Chrono's own truck tyre is 1.914 laterally, its
+	* passenger tyre 1.826. Assetto states the same physics as a power law (FZ0 with LS_EXPX/LS_EXPY)
+	* and converts exactly: r = 2^LS_EXP, which for the E30 M3's 0.7351 is 1.665 - a road tyre that
+	* loses grip with load faster than either of Chrono's, which is what a soft road compound does.
+	*
+	* ReferenceLoad <= 0 or a ratio <= 0 leaves the saturating fallback in CalculateAvailableGrip in
+	* charge, which is what a source stating no load law gets.
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0", DisplayName = "Load Sensitivity: Reference Load (N)"))
+	float LoadSensitivityReferenceLoad = 0.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0", ClampMax = "2.0", DisplayName = "Load Sensitivity: Force Ratio at Double Load (Longitudinal)"))
+	float LoadForceRatioAtDoubleLoadLong = 0.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0", ClampMax = "2.0", DisplayName = "Load Sensitivity: Force Ratio at Double Load (Lateral)"))
+	float LoadForceRatioAtDoubleLoadLat = 0.f;
+
+	/**
 	* Balances grip between turning and accelerating.
 	* 0.5 = Balanced.
 	* >0.5 = Prioritizes Turning (Easier to corner while braking).
@@ -348,6 +383,9 @@ struct KINETIFORGE_API FVehicleWheelSimContext
 	float CamberLateralDrift = 0.f;
 
 	float AvailableGrip = 0.f;
+	//: ADR-031: the same with the LATERAL exponent. A tyre's two directions lose grip with load at
+	//: different rates and the source states them apart (AC's LS_EXPX 0.8001 against LS_EXPY 0.7351).
+	float AvailableGripLat = 0.f;
 	FVector2f GravityComp2D = FVector2f(0.f);
 	FVector2f AccumulateTireImpulse2D = FVector2f(0.f);
 

@@ -69,7 +69,19 @@ void FVehicleWheelSolver::PreStep(
 		LocalState.DynFrictionMultiplier,
 		SuspensionState.StaticSprungMass,
 		LocalState.WheelLoad,
-		TireConfig.WheelLoadInfluenceFactor
+		TireConfig.WheelLoadInfluenceFactor,
+		TireConfig.LoadSensitivityReferenceLoad,
+		TireConfig.LoadForceRatioAtDoubleLoadLong
+	);
+	//: ADR-031: the lateral direction loses grip with load at its own rate, so it gets its own
+	//: available force. With no load law stated both calls return the same saturating value.
+	Context.AvailableGripLat = CalculateAvailableGrip(
+		LocalState.DynFrictionMultiplier,
+		SuspensionState.StaticSprungMass,
+		LocalState.WheelLoad,
+		TireConfig.WheelLoadInfluenceFactor,
+		TireConfig.LoadSensitivityReferenceLoad,
+		TireConfig.LoadForceRatioAtDoubleLoadLat
 	);
 
 	// get camber
@@ -657,9 +669,23 @@ float FVehicleWheelSolver::CalculateAvailableGrip(
 	const float FrictionMultiplier,
 	const float StaticSprungMass,
 	const float WheelLoad,
-	const float Saturation)
+	const float Saturation,
+	const float ReferenceLoad,
+	const float DoubleLoadForceRatio)
 {
 	const float DefaultGravity = 9.81f;
+	//: ADR-031: PROJECT CHRONO'S OWN LOAD LAW (ChTMeasyTire::InterpQ), which is the shape this
+	//: extension carries and every source is mapped into. Quadratic through the origin, through the
+	//: peak force at the reference load, and through the peak force at twice it; clamped at 3.5x the
+	//: reference load, which is Chrono's pn_max. The curve carries the coefficient, so this is the
+	//: load term alone.
+	if (ReferenceLoad > 0.f && DoubleLoadForceRatio > 0.f)
+	{
+		const float q = FMath::Clamp(FMath::Max(WheelLoad, 0.f) / ReferenceLoad, 0.f, 3.5f);
+		const float HalfRatio = 0.5f * DoubleLoadForceRatio;
+		const float Scale = q * (2.f - HalfRatio - (1.f - HalfRatio) * q);
+		return FrictionMultiplier * ReferenceLoad * FMath::Max(Scale, 0.f);
+	}
 	float NormWheelLoad = StaticSprungMass * DefaultGravity;
 	float LoadRatio = UVehicleUtilities::SafeDivide(WheelLoad, NormWheelLoad);
 	float b = (1.f - Saturation) / (2.f + 2.f * Saturation);
@@ -732,7 +758,7 @@ FVector2f FVehicleWheelSolver::SolveTireForce(
 
 	// magic formula
 	float MaxFx = TireConfig.MaxFx * Context.AvailableGrip * Context.LongForceScale;
-	float MaxFy = TireConfig.MaxFy * Context.AvailableGrip * Context.LatForceScale;
+	float MaxFy = TireConfig.MaxFy * Context.AvailableGripLat * Context.LatForceScale;
 	FVector2f MFTireForce = ConstraintTireForce;
 	if (bUseFxCurve)
 	{

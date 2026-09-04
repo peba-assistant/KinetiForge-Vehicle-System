@@ -130,7 +130,9 @@ private:
 		const float FrictionMultiplier,
 		const float StaticSprungMass,
 		const float WheelLoad,
-		const float Saturation);
+		const float Saturation,
+		const float ReferenceLoad = 0.f,
+		const float DoubleLoadForceRatio = 0.f);
 	static FVector2f SolveTireForce(
 		FVehicleWheelSimState& LocalState,
 		const FVehicleWheelSimContext& Context,
