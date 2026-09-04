@@ -199,6 +199,27 @@ struct KINETIFORGE_API FVehicleSuspensionSpringConfig
 	float CompressionDamping = 0.4;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0"))
 	float ReboundDamping = 0.6;
+	//: DIGRESSIVE VALVING (2026-09-04, the owner's order after his E30 drive: "digressive-valved
+	//: dampers: firm at low piston speeds to control roll and pitch, with high-speed blow-off to
+	//: absorb sharp bumps. go and make them"). A real damper is not one number. Its shim stack seals
+	//: at low piston speed, which is where roll and pitch live, and blows off above a knee so a sharp
+	//: edge does not come through the seat. The E30 M3's own Boge gas-pressure units are exactly this:
+	//: M3-specific valving, front strut inserts and separate rear shocks, digressive by construction
+	//: (owner, 2026-09-04). Assetto states the pair and the knee for all 180 cars in the corpus.
+	//: The E30's rebound is 4,000 N.s/m below 0.12 m/s and 2,089 above it, which makes 1,274 N at
+	//: 0.5 m/s - inside the 800-1,500 N a passenger car damper makes there, where the low-speed rate
+	//: alone would have made 2,000 N and did, until this existed.
+	//: Zero in either field leaves the damper LINEAR, which is what a source stating one rate says.
+	//: Same units and same bUseDampingRatio meaning as the pair above.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0"))
+	float CompressionDampingFast = 0.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0"))
+	float ReboundDampingFast = 0.f;
+	//: The piston speeds the blow-off opens at, cm/s of strut travel, one per direction.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0"))
+	float CompressionKneeSpeed = 0.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0"))
+	float ReboundKneeSpeed = 0.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	bool bUseDampingRatio = true;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0"))

@@ -383,6 +383,12 @@ private:
 		Chaos::FVec3 ContactNormal,
 		Chaos::FVec3 WheelRight
 	);
+	//: The damping coefficient a DIGRESSIVE damper shows at this piston speed (2026-09-04). Below the
+	//: knee the shim stack is sealed and the slow rate stands; above it the stack blows off and the
+	//: force keeps rising on the fast rate, so the coefficient the solver wants is the secant
+	//: F(v)/v - continuous at the knee, and exactly the slow rate when no knee is configured.
+	static float GetDigressiveDamping(float SlowRate, float FastRate, float KneeSpeed, float AbsVelocity);
+
 	static float GetCriticalDamping(
 		const float SpringStiffness,
 		const float StaticSprungMass

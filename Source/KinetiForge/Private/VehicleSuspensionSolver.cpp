@@ -1088,6 +1088,8 @@ void FVehicleSuspensionSolver::UpdateStrutLength(
 		float EquivSpring = SpringConfig.SpringStiffness * MotionRatio * MotionRatio;
 		float ReboundDamp = SpringConfig.ReboundDamping * MotionRatio * MotionRatio;
 		float CompDamp = SpringConfig.CompressionDamping * MotionRatio * MotionRatio;
+		float ReboundDampFast = SpringConfig.ReboundDampingFast * MotionRatio * MotionRatio;
+		float CompDampFast = SpringConfig.CompressionDampingFast * MotionRatio * MotionRatio;
 
 		const float ThisWheelChassisZ = Ctx.HubChassisTransform.GetLocation().Z;
 
@@ -1120,6 +1122,8 @@ void FVehicleSuspensionSolver::UpdateStrutLength(
 			float CriticalDamping = GetCriticalDamping(SpringConfig.SpringStiffness, Ctx.StaticSprungMass);
 			ReboundDamp *= CriticalDamping;
 			CompDamp *= CriticalDamping;
+			ReboundDampFast *= CriticalDamping;
+			CompDampFast *= CriticalDamping;
 		}
 
 		float CurrentLength = Ctx.StrutCurrentLength;
@@ -1152,7 +1156,10 @@ void FVehicleSuspensionSolver::UpdateStrutLength(
 			float PredictedVelocity = CurrentVelocity + (StaticForce * VirtualUnsprungMassInv) * m_to_cm * SubDt;
 
 			// 3. 全隐式求解分母 (Implicit Denominator)
-			float EquivDamp = (PredictedVelocity > 0.f) ? ReboundDamp : CompDamp;
+			const float AbsPredicted = FMath::Abs(PredictedVelocity);
+			float EquivDamp = (PredictedVelocity > 0.f)
+				? GetDigressiveDamping(ReboundDamp, ReboundDampFast, SpringConfig.ReboundKneeSpeed, AbsPredicted)
+				: GetDigressiveDamping(CompDamp, CompDampFast, SpringConfig.CompressionKneeSpeed, AbsPredicted);
 
 			// 隐式阻尼项: C * dt / m
 			float ImplicitDampingTerm = EquivDamp * SubDt * VirtualUnsprungMassInv;
@@ -2188,6 +2195,17 @@ Chaos::FVec3 FVehicleSuspensionSolver::CalculatePointEffectiveMass3D(
 		ComputeEffectiveMass(ImpactNormal));
 }
 
+float FVehicleSuspensionSolver::GetDigressiveDamping(const float SlowRate, const float FastRate,
+	const float KneeSpeed, const float AbsVelocity)
+{
+	if (FastRate <= 0.f || KneeSpeed <= 0.f || AbsVelocity <= KneeSpeed)
+	{
+		return SlowRate;
+	}
+	//: F(v) = Slow*Knee + Fast*(v - Knee); the solver multiplies by v, so hand it F(v)/v.
+	return (SlowRate * KneeSpeed + FastRate * (AbsVelocity - KneeSpeed)) / AbsVelocity;
+}
+
 float FVehicleSuspensionSolver::GetCriticalDamping(
 	const float SpringStiffness,
 	const float StaticSprungMass)
@@ -2247,8 +2265,12 @@ void FVehicleSuspensionSolver::ComputeSuspensionForce(
 	const float ActiveSpring = FMath::Min(MaxSpring, EquivSpringStiffness);
 	float SpringForce = ActiveSpring * SpringCompression;
 
-	float DamperStiffness = (Ctx.StrutCurrentVelocity > 0.f) ?
-		SpringConfig.ReboundDamping : SpringConfig.CompressionDamping;
+	const bool bRebounding = Ctx.StrutCurrentVelocity > 0.f;
+	float DamperStiffness = GetDigressiveDamping(
+		bRebounding ? SpringConfig.ReboundDamping : SpringConfig.CompressionDamping,
+		bRebounding ? SpringConfig.ReboundDampingFast : SpringConfig.CompressionDampingFast,
+		bRebounding ? SpringConfig.ReboundKneeSpeed : SpringConfig.CompressionKneeSpeed,
+		FMath::Abs(Ctx.StrutCurrentVelocity));
 	if (SpringConfig.bUseDampingRatio)DamperStiffness *= GetCriticalDamping(SpringConfig.SpringStiffness, Ctx.StaticSprungMass);
 	
 	const float EquivDamperStiffness = DamperStiffness * MotionRatio * MotionRatio;
