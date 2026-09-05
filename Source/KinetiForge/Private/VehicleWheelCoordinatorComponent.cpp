@@ -571,6 +571,15 @@ void UVehicleWheelCoordinatorComponent::UpdateAeros(const float InDeltaTime)
 
 			const float UnitScale = 1.f;
 			FVector LinearImpulse = SumLinearForce * InDeltaTime * UnitScale;
+			// Previs diagnostic (2026-09-05, #444): the summed aero force actually applied, about once a second
+			{
+				static int32 AeroSumLogCounter = 0;
+				if ((++AeroSumLogCounter % 120) == 0)
+				{
+					UE_LOG(LogTemp, Verbose, TEXT("VehicleWheelCoordinator: %d aero component(s), summed force %s (|F| %.0f), dt %.4f s"),
+					       RegisteredAeros.Num(), *SumLinearForce.ToString(), SumLinearForce.Size(), InDeltaTime);
+				}
+			}
 			FVector AngularImpulse = SumAngularTorque * InDeltaTime * UnitScale;
 
 			ChassisHandle->SetLinearImpulse(ChassisHandle->LinearImpulse() + LinearImpulse, false);

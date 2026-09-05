@@ -46,6 +46,21 @@ void UVehicleAirfoilComponent::CalculateCustomAeroForces(
 	// 为了让正迎角对应机翼上仰，传入 (-Z, -X) 到 Atan2。
 	// FMath::Atan2 返回值范围是 [-PI, PI]，无缝且连续。
 	float AoA_Rad = FMath::Atan2(-LocalWind.Z, -LocalWind.X);
+	// Previs (2026-09-05, #444): a wind from BEHIND the chord (|AoA| > 90 deg) is the wing's frame facing
+	// backwards, not a stalled wing - the E30's body table read its -10 deg edge value (CD 1.0 instead of
+	// 0.32) and the car lost 0.29 s to 100 km/h. The angle is mirrored into the chord plane; the raw value is
+	// logged the first times it happens so the frame error stays visible.
+	if (FMath::Abs(AoA_Rad) > HALF_PI)
+	{
+		static int32 ReversedWindLogs = 0;
+		if (ReversedWindLogs < 3)
+		{
+			++ReversedWindLogs;
+			UE_LOG(LogTemp, Warning, TEXT("VehicleAirfoil '%s': apparent wind from behind the chord (raw AoA %.1f deg, local wind %s) - mirrored into the chord plane"),
+			       *GetName(), FMath::RadiansToDegrees(AoA_Rad), *LocalWind.ToString());
+		}
+		AoA_Rad = (AoA_Rad > 0.f ? PI : -PI) - AoA_Rad;
+	}
 	float AoA_Deg = FMath::RadiansToDegrees(AoA_Rad);
 
 	// 4. 读取基础气动系数
@@ -72,6 +87,15 @@ void UVehicleAirfoilComponent::CalculateCustomAeroForces(
 	// 标量力大小。单位是标准的 牛顿 (N)
 	float LiftMag_SI = DynamicPressureArea_SI * CL;
 	float DragMag_SI = DynamicPressureArea_SI * CD_Total;
+	// Previs diagnostic (2026-09-05, #444): what this wing computes, about once a second per wing
+	{
+		static int32 AeroLogCounter = 0;
+		if ((++AeroLogCounter % 360) == 0)
+		{
+			UE_LOG(LogTemp, Verbose, TEXT("VehicleAirfoil '%s': v %.1f m/s AoA %.2f deg CL %.3f CD %.3f (induced %.4f) area %.2f -> lift %.0f N drag %.0f N"),
+			       *GetName(), FMath::Sqrt(SpeedSq_SI), AoA_Deg, CL, CD_Total, CD_Induced, Config.WingArea, LiftMag_SI, DragMag_SI);
+		}
+	}
 
 	// 7. 世界空间向量合成 (极致鲁棒性)
 	FVector WindDirWorld = ApparentWindWorld.GetSafeNormal();
