@@ -2330,3 +2330,13 @@ void FVehicleSuspensionSolver::ComputeSuspensionForce(
 	Ctx.EffectiveSprungMassLong = EffectiveMass.X * LoadFactor;
 	Ctx.EffectiveSprungMassLat = EffectiveMass.Y * LoadFactor;
 }
+
+void FVehicleSuspensionSolver::IgnoreVehicleInGroundQuery(const AActor* Vehicle)
+{
+	// Rebuilt rather than appended, so calling this twice cannot grow the list.
+	QueryParams = FCollisionQueryParams::DefaultQueryParam;
+	if (Vehicle != nullptr)
+	{
+		QueryParams.AddIgnoredActor(Vehicle);
+	}
+}

@@ -115,6 +115,10 @@ void UVehicleWheelComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// previs 2026-09-04: the suspension's ground query must not find this car. See
+	// FVehicleSuspensionSolver::IgnoreVehicleInGroundQuery for what it cost before it did.
+	Suspension.IgnoreVehicleInGroundQuery(GetOwner());
+
 	// ...
 	WheelCoordinator = UVehicleWheelCoordinatorComponent::FindWheelCoordinator(Chassis.Get());
 	if (WheelCoordinator.IsValid())

@@ -188,6 +188,22 @@ public:
 	FVehicleSuspensionCachedLUTs CachedLUTs;
 	FVehicleSuspensionHitResult RayCastResult;
 
+	/**
+	* Keep the suspension's ground query from finding the vehicle it belongs to.
+	*
+	* previs 2026-09-04, at the owner's ruling. QueryParams was DefaultQueryParam and nothing
+	* anywhere filled it, so the downward scene query each wheel uses to find the road ignored
+	* nothing at all - not even its own car. With only a small collision box that never mattered,
+	* because the box stopped at the hub plane. Give a car the collision mesh its own source ships
+	* and it matters immediately: a real hull reaches BELOW the hub centres, because a car's sills
+	* and floor pan do, so every wheel found "road" about 16 cm under its own hub and the car sat
+	* on its belly with its wheels spinning in the air. Measured on a BMW M3 E30: 3 cm off the
+	* ground with 0 of 4 wheels down, against 49 cm and 4 of 4 with the box.
+	*
+	* Called once per wheel when it begins play. Safe to call again; the list is rebuilt.
+	*/
+	void IgnoreVehicleInGroundQuery(const AActor* Vehicle);
+
 protected:
 	FCollisionQueryParams QueryParams = FCollisionQueryParams::DefaultQueryParam;
 	FCollisionResponseParams ResponseParams = FCollisionResponseParams::DefaultResponseParam;

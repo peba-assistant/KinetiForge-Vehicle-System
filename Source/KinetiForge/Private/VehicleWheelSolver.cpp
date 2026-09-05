@@ -194,7 +194,9 @@ void FVehicleWheelSolver::DrawWheelForce(
 		State.DynFrictionMultiplier,
 		SuspensionState.StaticSprungMass,
 		State.WheelLoad,
-		TireConfig.WheelLoadInfluenceFactor
+		TireConfig.WheelLoadInfluenceFactor,
+		TireConfig.LoadSensitivityReferenceLoad,
+		TireConfig.LoadForceRatioAtDoubleLoadLong	// previs (Fable review 2026-09-05): the debug circle draws the ADR-031 law the solver runs, not the old saturating one
 	);
 
 	//draw grip circle

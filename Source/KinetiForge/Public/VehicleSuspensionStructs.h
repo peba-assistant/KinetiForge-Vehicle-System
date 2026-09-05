@@ -215,7 +215,10 @@ struct KINETIFORGE_API FVehicleSuspensionSpringConfig
 	float CompressionDampingFast = 0.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0"))
 	float ReboundDampingFast = 0.f;
-	//: The piston speeds the blow-off opens at, cm/s of strut travel, one per direction.
+	//: The speeds the blow-off opens at, one per direction, in cm/s of the solver's strut travel -
+	//: which is the WHEEL's ray travel (Stroke is wheel travel; EquivSpring = k * MotionRatio^2 rides
+	//: on the same length), so a source's wheel-speed knee goes in as m/s x 100 with NO motion ratio
+	//: (Fable review 2026-09-05).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0"))
 	float CompressionKneeSpeed = 0.f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0"))
