@@ -64,6 +64,21 @@ void FVehicleWheelSolver::PreStep(
 		Context.LatForceDir
 	);
 
+	// get camber
+	//: THE CURRENT CAMBER, SOLVED BEFORE ANYTHING READS IT (GPT-6 review, 2026-09-07, finding 1).
+	//: `CalculateCamberLateralDrift` is what writes `LocalState.SignedCamberDegree`, so while this
+	//: call sat BELOW the grip factor the envelope was multiplied by the PREVIOUS macro step's
+	//: camber — and by 1.0 for the first grounded step after a landing, because the airborne path
+	//: zeroes the field. Camber is solved first now; the drift, the grip factor and the telemetry
+	//: all read the same current angle.
+	Context.CamberLateralDrift = CalculateCamberLateralDrift(
+		SuspensionState,
+		AsyncChassisWorldTransform,
+		WheelConfig,
+		CachedLUTs,
+		LocalState.SignedCamberDegree
+	);
+
 	//: #494 (owner, 2026-09-07: "figure out a way for us to honor camber, its quite a big deal"). THE
 	//: CAMBER FACTOR, read from this tyre's own curve at the camber the suspension just solved. It
 	//: multiplies the friction envelope, which is exactly what Assetto's DCAMBER pair does to D: a
@@ -95,15 +110,6 @@ void FVehicleWheelSolver::PreStep(
 		TireConfig.LoadSensitivityReferenceLoad,
 		TireConfig.LoadForceRatioAtDoubleLoadLat
 	) * CamberGripFactor;  //: #494
-
-	// get camber
-	Context.CamberLateralDrift = CalculateCamberLateralDrift(
-		SuspensionState,
-		AsyncChassisWorldTransform,
-		WheelConfig,
-		CachedLUTs,
-		LocalState.SignedCamberDegree
-	);
 
 	// clear tire force
 	Context.AccumulateTireImpulse2D = FVector2f(0.f);
