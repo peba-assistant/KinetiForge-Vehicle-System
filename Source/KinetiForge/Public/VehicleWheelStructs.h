@@ -171,6 +171,23 @@ struct KINETIFORGE_API FVehicleTireConfig
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (DisplayName = "Curve: Camber To Lateral Drift"))
 	UCurveFloat* CamberToLateralDrift = nullptr;
+
+	/*
+	* #494: HOW MUCH GRIP THE TYRE HAS AT THIS CAMBER, as a multiplier on the friction envelope.
+	*
+	* x: |camber| in degrees.   y: multiplier on available grip. 1.0 is a flat tyre.
+	*
+	* A leaned tyre carries more lateral force than a flat one up to an optimum — a couple of degrees
+	* on a road tyre, three or four on a slick — and less beyond it, because past the optimum the
+	* contact patch has narrowed. Assetto states the same curve as a quadratic per compound
+	* (DCAMBER_0 |c| + DCAMBER_1 c^2, c in radians, DCAMBER_0 > 0 and DCAMBER_1 < 0); the translation
+	* samples that into this curve so a source which MEASURED a shape can state the shape instead.
+	*
+	* Null, or a curve of 1.0, is a tyre whose grip does not answer to camber — which is what every
+	* car did before this existed.
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (DisplayName = "Curve: Camber To Grip Factor"))
+	UCurveFloat* CamberToGripFactor = nullptr;
 };
 
 USTRUCT(BlueprintType)
@@ -307,6 +324,8 @@ struct KINETIFORGE_API FVehicleWheelCachedLUTs
 	FVehicleTireLUT<64> Fx = FVehicleTireLUT<64>(1.f);
 	FVehicleTireLUT<64> Fy = FVehicleTireLUT<64>(1.f);
 	FVehicleLUT<64> CamberToLateralDrift = FVehicleLUT<64>(0.f);
+	//: #494: 1.0 is "camber changes nothing", so an unstated curve leaves the tyre exactly as it was.
+	FVehicleLUT<64> CamberToGripFactor = FVehicleLUT<64>(1.f);
 };
 
 USTRUCT(BlueprintType, meta = (ToolTip = "wheel state in simulation"))

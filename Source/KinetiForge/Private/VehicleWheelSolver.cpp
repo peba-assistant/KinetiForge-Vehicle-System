@@ -64,6 +64,18 @@ void FVehicleWheelSolver::PreStep(
 		Context.LatForceDir
 	);
 
+	//: #494 (owner, 2026-09-07: "figure out a way for us to honor camber, its quite a big deal"). THE
+	//: CAMBER FACTOR, read from this tyre's own curve at the camber the suspension just solved. It
+	//: multiplies the friction envelope, which is exactly what Assetto's DCAMBER pair does to D: a
+	//: leaned tyre carries more lateral force than a flat one up to an optimum — around 2.6 degrees
+	//: across this corpus, 3.4 on a slick — and less past it. |camber|, because a tyre does not care
+	//: which way it leans; 1.0 when the tyre states no curve, so an unstated car is untouched.
+	//: normalised over the same 0..90 degree domain the curve was baked on, exactly as the drift curve
+	//: beside it is read (CalculateCamberLateralDrift), and floored at zero so a curve drawn negative
+	//: by hand cannot invert the tyre.
+	const float CamberGripFactor = FMath::Max(
+		CachedLUTs.CamberToGripFactor.FastEval(FMath::Abs(LocalState.SignedCamberDegree) / 90.f).Value, 0.f);
+
 	// get wheel load
 	Context.AvailableGrip = CalculateAvailableGrip(
 		LocalState.DynFrictionMultiplier,
@@ -72,7 +84,7 @@ void FVehicleWheelSolver::PreStep(
 		TireConfig.WheelLoadInfluenceFactor,
 		TireConfig.LoadSensitivityReferenceLoad,
 		TireConfig.LoadForceRatioAtDoubleLoadLong
-	);
+	) * CamberGripFactor;  //: #494
 	//: ADR-031: the lateral direction loses grip with load at its own rate, so it gets its own
 	//: available force. With no load law stated both calls return the same saturating value.
 	Context.AvailableGripLat = CalculateAvailableGrip(
@@ -82,7 +94,7 @@ void FVehicleWheelSolver::PreStep(
 		TireConfig.WheelLoadInfluenceFactor,
 		TireConfig.LoadSensitivityReferenceLoad,
 		TireConfig.LoadForceRatioAtDoubleLoadLat
-	);
+	) * CamberGripFactor;  //: #494
 
 	// get camber
 	Context.CamberLateralDrift = CalculateCamberLateralDrift(
@@ -267,6 +279,16 @@ void FVehicleWheelSolver::UpdateCachedLUTs(const FVehicleTireConfig& Config)
 	else
 	{
 		CachedLUTs.Fy.SetAllTo(1.f);
+	}
+	//: #494: baked the same way and over the same 0..90 degree domain as the drift curve beside it, so
+	//: the two camber curves are read alike. An absent curve stays at 1.0 — grip unchanged by camber.
+	if (IsValid(Config.CamberToGripFactor))
+	{
+		CachedLUTs.CamberToGripFactor.CopyFromRichCurve(Config.CamberToGripFactor->FloatCurve, FVector2f(0.f, 90.f));
+	}
+	else
+	{
+		CachedLUTs.CamberToGripFactor.SetAllTo(1.f);
 	}
 	if (IsValid(Config.CamberToLateralDrift))
 	{
