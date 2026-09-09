@@ -80,6 +80,22 @@ struct FVehicleInputAssistConfig
     bool bRevMatching = true;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0", ClampMax = "1.0"))
     float RevMatchMaxThrottle = 0.6;
+    //: **THE LAUNCH (Previs, owner 2026-09-10: an F40 at full throttle "roms sag to 1400 rpm and the
+    //: car creeps away" where it should light its tyres).** `AutoClutchRange` closes the clutch AS
+    //: THE ENGINE RISES, which on a turbo car is a trap: at 1436 rpm the band held 61 % of the
+    //: clutch open and passed 124 N.m - about all the F40 makes off boost - so engine torque and
+    //: clutch capacity climbed together and the engine could never get through the band. Measured
+    //: in his own drive log. A driver launching a car does the opposite: he holds the engine at a
+    //: launch speed on a slipping clutch and lets it bite there. So at deliberate throttle, from a
+    //: low speed, in gear, the clutch is held OPEN below `LaunchRpm` and closes hard above it.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ToolTip = "hold the clutch slipping to a launch rpm at full throttle from low speed, instead of closing it by rpm alone"))
+    bool bLaunchClutch = true;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0", ClampMax = "1.0", ToolTip = "throttle above which a launch is deliberate"))
+    float LaunchThrottle = 0.7f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0", ToolTip = "m/s below which a launch clutch applies; above it the ordinary band does"))
+    float LaunchSpeed = 8.f;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0", ClampMax = "1.0", ToolTip = "where the launch rpm sits between the auto-clutch band's top and the limiter"))
+    float LaunchRpmFraction = 0.45f;
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     bool bAutoHold = true;
     UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ToolTip = "Releases the brake of the axle if the torque weight(normalized) is > 0.5"))

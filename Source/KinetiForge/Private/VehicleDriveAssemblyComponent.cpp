@@ -168,9 +168,16 @@ void UVehicleDriveAssemblyComponent::UpdateThrottle(float InDeltaTime)
 			InputValues.Smoothened.Throttle = FMath::Min(InputValues.Smoothened.Throttle, InputAssistConfig.RevMatchMaxThrottle);
 		}
 		//if not in gear and no rev-matching and not sequential
+		//: **UNLESS HE IS FLAT (Previs, owner 2026-09-10).** Cutting the throttle through the shift
+		//: window is what protects an H-pattern box from an over-rev when the driver has no clutch
+		//: pedal. It is the wrong answer when he is asking for everything he has: the clutch is
+		//: OPEN, so a real engine FLARES, and dropping it to idle instead is how "switching into
+		//: first gear from high revs" ended at 1400 rpm. Above the launch throttle the assist gets
+		//: out of the way; below it the rev-match blip and this cut behave exactly as before.
 		else if (!GearboxRaw->GetIsInGear() &&
 			InputAssistConfig.bAutomaticClutch && 
-			!GearboxRaw->GetConfig().bSequentialGearbox)
+			!GearboxRaw->GetConfig().bSequentialGearbox &&
+			RealThrottleInput < InputAssistConfig.LaunchThrottle)
 		{
 			InputValues.Smoothened.Throttle = 0.f;
 		}
@@ -237,6 +244,32 @@ void UVehicleDriveAssemblyComponent::UpdateClutch(float InDeltaTime)
 
 		//take engine rpm into account
 		float Bias = FMath::GetMappedRangeValueClamped(InputAssistConfig.AutoClutchRange, FVector2f(1, 0), EngineRaw->GetRPM());
+
+		//: **THE LAUNCH (Previs, owner 2026-09-10).** The band above closes the clutch AS THE ENGINE
+		//: RISES, and on a turbocharged car that is a trap the engine cannot climb out of: the
+		//: capacity it must pull against grows exactly as fast as the torque it is making. Measured
+		//: on his own F40, from its own log - band 1200 to 1800 rpm, engine at 1436, clutch passing
+		//: 124 N.m at 88 % throttle, car creeping. He asked for the clutch to be "dumped more
+		//: violently at higher rpms".
+		//:
+		//: A driver launching a car does not close the clutch by engine speed. He holds the engine
+		//: AT a launch speed on a slipping clutch and lets it bite there. So when the throttle is
+		//: deliberate, the car is slow and a gear is engaged, the clutch is held OPEN below the
+		//: launch speed - the engine is free to get there, which on this car means through the
+		//: turbo's spool - and shuts above it. Everything else keeps the anti-stall band: this is
+		//: the launch, not a new clutch model.
+		const float LaunchThrottleInput = InputValues.bSwitchThrottleAndBrake ? InputValues.Raw.Brake : InputValues.Raw.Throttle;
+		if (InputAssistConfig.bLaunchClutch &&
+			GearboxRaw->GetIsInGear() && GearboxRaw->GetCurrentGearRatio() != 0.f &&
+			LaunchThrottleInput >= InputAssistConfig.LaunchThrottle &&
+			FMath::Abs(LocalLinearVelocity.X) < InputAssistConfig.LaunchSpeed)
+		{
+			const float BandTop = FMath::Max(InputAssistConfig.AutoClutchRange.Y, InputAssistConfig.AutoClutchRange.X + 1.f);
+			const float LaunchRPM = BandTop + FMath::Max(EngineRaw->GetMaxRPM() - BandTop, 0.f) * InputAssistConfig.LaunchRpmFraction;
+			Bias = FMath::GetMappedRangeValueClamped(
+				FVector2f(InputAssistConfig.AutoClutchRange.X, FMath::Max(LaunchRPM, InputAssistConfig.AutoClutchRange.X + 1.f)),
+				FVector2f(1, 0), EngineRaw->GetRPM());
+		}
 		TargetClutchValue = FMath::Clamp(TargetClutchValue + Bias, 0.f, 1.f);
 		InputValues.Smoothened.Clutch = FMath::Min(InputValues.Smoothened.Clutch + Bias, TargetClutchValue);
 
