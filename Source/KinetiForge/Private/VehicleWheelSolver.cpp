@@ -81,7 +81,15 @@ void FVehicleWheelSolver::PreStep(
             TireConfig.LoadSensitivityReferenceLoad,Ratio);
     };
     const float G0=FMath::Max(CachedLUTs.CamberToGripFactor.FastEval(0).Value,SMALL_NUMBER);
-    const float Gy=FMath::Max(0.f,CachedLUTs.CamberToGripFactor.FastEval(FMath::Abs(Context.Response.gamma)/(PI/2)).Value/G0);
+    //: THE IMPORTED CURVE IS READ AT THE ANGLE THE WHEEL IS ACTUALLY AT (Previs, GPT-6 Astra's
+    //: merge review: "decide explicitly whether the fitted-model domain limit should also truncate
+    //: an independently supplied curve"). It should not. `Response.gamma` is clamped to +/-12
+    //: degrees because that is where the FITTED coefficients stop being fitted; the per-tyre camber
+    //: curve is Assetto's own data over 0-90 degrees, and a car that lands, strikes a kerb or rolls
+    //: hard goes past 12 with its curve still describing it. So the fitted terms keep their bound
+    //: and this one reads the raw angle, capped only at the curve's own domain.
+    const float Gy=FMath::Max(0.f,CachedLUTs.CamberToGripFactor.FastEval(
+        FMath::Min(FMath::Abs(LocalState.RawCamberRad),float(PI/2))/float(PI/2)).Value/G0);
     Context.AvailableGrip=Grip(LocalState.DynFrictionMultiplier,TireConfig.LoadForceRatioAtDoubleLoadLong,LocalState.WheelLoad)*Context.Response.grip_x;
     Context.AvailableGripLat=Grip(LocalState.DynFrictionMultiplier,TireConfig.LoadForceRatioAtDoubleLoadLat,LocalState.WheelLoad)*Context.Response.grip_y*Gy;
     Context.PeakForce=FVector2f(Context.AvailableGrip*TireConfig.MaxFx*CachedLUTs.Fx.PeakFriction,
