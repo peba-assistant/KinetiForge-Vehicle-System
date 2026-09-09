@@ -81,12 +81,6 @@ private:
 		const FVector3f& LongForceDir,
 		const FVector3f& LatForceDir,
 		const FVector3f& ImpactPointWorldVelocity);
-	static void WheelAcceleration(
-		FVehicleWheelSimState& LocalState,
-		const FVehicleWheelSimContext& Context,
-		const float LastTireLongitudinalForce,
-		const bool bOnGround,
-		const float SlipVelocityTolerance = 0.1f);
 	static void UpdateSlipVelocity(
 		FVehicleWheelSimState& LocalState,
 		const FVehicleWheelSimContext& Context,
@@ -99,26 +93,12 @@ private:
 		FVehicleWheelSimState& LocalState,
 		const FVehicleWheelSimContext& Context,
 		const bool bOnGround);
-	static float CalculateCamberLateralDrift(
-		const FVehicleSuspensionSimState& SuspensionState,
-		const FTransform& AsyncChassisWorldTransform,
-		const FVehicleWheelConfig& Config,
-		const FVehicleWheelCachedLUTs& TireLUTs,
-		float& OutSignedCamberDeg);
 	/**Returns transient slip ratio and slip angle (normalized)*/
 	static FVector2f UpdateTransientSlip(
 		FVehicleWheelSimState& LocalState,
 		const FVehicleWheelSimContext& Context,
 		const bool bOnGround,
 		const FVector2f& RelaxationLength);
-	static float CalculateConstraintLongForce(
-		FVehicleWheelSimState& LocalState,
-		const FVehicleWheelSimContext& Context,
-		const float EffectiveSprungMass);
-	static float CalculateConstraintLatForce(
-		FVehicleWheelSimState& LocalState,
-		const FVehicleWheelSimContext& Context,
-		const float EffectiveSprungMassy);
 	static FVector2f CalculateGravityCompensationOnSlope(
 		FVehicleWheelSimState& LocalState,
 		FVehicleWheelSimContext& Context,

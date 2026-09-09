@@ -184,16 +184,22 @@ void UVehicleAxleAssemblyComponent::UpdateTCS(
 	if (WheelR)SumSlipRatio += FMath::Abs(WheelR->GetPredictedSlipRatio());
 	float AvrgSlipRatio = SumSlipRatio / State.NumOfWheels;
 
+    // The current pressure/surface response sets the tyre peak, not a fixed old slip target.
+    float TargetSlip=0,Count=0;
+    for(auto* W:{WheelL,WheelR}) if(W && W->GetIsWheelOnGround()) {
+        TargetSlip+=W->GetWheelState().EffectivePeakSlipRatio; ++Count;
+    }
+    TargetSlip=Count>0?TargetSlip/Count:TCSConfig.OptimalSlip;
 	State.bTCSTriggered =
 		TCSConfig.bTractionControlSystemEnabled
 		&& State.NumOfWheelOnGround
 		&& State.LocalLinearVelocity.X * TargetDriveTorque > SMALL_NUMBER
 		&& FMath::Abs(State.LocalLinearVelocity.X) > TCSConfig.ActivationSpeed
-		&& AvrgSlipRatio > TCSConfig.OptimalSlip;
+		&& AvrgSlipRatio > TargetSlip;
 
 	if (State.bTCSTriggered)
 	{
-		float Error = AvrgSlipRatio - TCSConfig.OptimalSlip;
+		float Error = AvrgSlipRatio - TargetSlip;
 		float TcsFactor = 1.0f - (Error * TCSConfig.Sensitivity);
 		TcsFactor = FMath::Clamp(TcsFactor, 0.0f, 1.0f);
 		State.AxleDriveTorque = TargetDriveTorque * TcsFactor;

@@ -1,11 +1,23 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 using UnrealBuildTool;
+using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 
 public class KinetiForge : ModuleRules
 {
 	public KinetiForge(ReadOnlyTargetRules Target) : base(Target)
 	{
+		PublicIncludePaths.Add(Path.GetFullPath(Path.Combine(ModuleDirectory, "../../../../../Core/include")));
+        // Exact model source identity, including uncommitted fork builds.
+        using (var sha = SHA256.Create()) {
+            string body = File.ReadAllText(Path.Combine(ModuleDirectory,"Private/VehicleWheelSolver.cpp"), Encoding.Latin1)
+                + File.ReadAllText(Path.Combine(ModuleDirectory,"Public/VehicleWheelStructs.h"), Encoding.Latin1)
+                + File.ReadAllText(Path.Combine(ModuleDirectory,"../../../../../Core/include/previs/tire_response.hpp"));
+            string id = System.BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(body))).Replace("-", "").ToLowerInvariant();
+            PublicDefinitions.Add("KINETIFORGE_TYRE_BUILD_ID=\"" + id + "\"");
+        }
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 		
 		PublicIncludePaths.AddRange(

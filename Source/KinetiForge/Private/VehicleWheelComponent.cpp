@@ -52,16 +52,6 @@ UVehicleWheelComponent::UVehicleWheelComponent()
 		}
 	}
 
-	if (!TireConfig.CamberToLateralDrift)
-	{
-		static ConstructorHelpers::FObjectFinder<UCurveFloat> CurveObj(
-			TEXT("/Script/Engine.CurveFloat'/KinetiForge/DefaultConfigs/Curves/DefaultCamberToLateralDrift.DefaultCamberToLateralDrift'")
-		);
-		if (CurveObj.Succeeded())
-		{
-			TireConfig.CamberToLateralDrift = CurveObj.Object;
-		}
-	}
 
 #if 0
 	if (!SuspensionKinematicsConfig.CamberCurve)
@@ -404,12 +394,17 @@ void UVehicleWheelComponent::FinalizePreStepSolidAxleSuspension(
 void UVehicleWheelComponent::PreStepWheel(
 	float InMacroDeltaTime)
 {
+	FVehicleTireConfig Snapshot=TireConfig;
+	Snapshot.OperatingPressurePa=RequestedOperatingPressurePa.Load();
+	Snapshot.ResponseProfile.slide_assistance=RequestedSlideAssistance.Load();
+	Snapshot.ResponseProfile.reference_mu_x=RequestedReferenceMuX.Load();
+	Snapshot.ResponseProfile.reference_mu_y=RequestedReferenceMuY.Load();
 	Wheel.PreStep(
 		InMacroDeltaTime, 
 		ChassisAsyncWorldTransform,
 		Suspension.State, 
 		WheelConfig, 
-		TireConfig
+		Snapshot
 	);
 }
 
@@ -554,6 +549,10 @@ void UVehicleWheelComponent::SetWheelConfig(const FVehicleWheelConfig& NewConfig
 void UVehicleWheelComponent::SetTireConfig(const FVehicleTireConfig& NewConfig)
 {
 	TireConfig = NewConfig;
+	RequestedOperatingPressurePa.Store(NewConfig.OperatingPressurePa);
+	RequestedSlideAssistance.Store(NewConfig.ResponseProfile.slide_assistance);
+	RequestedReferenceMuX.Store(NewConfig.ResponseProfile.reference_mu_x);
+	RequestedReferenceMuY.Store(NewConfig.ResponseProfile.reference_mu_y);
 	Wheel.UpdateCachedLUTs(NewConfig);
 }
 
@@ -698,7 +697,7 @@ float UVehicleWheelComponent::GetSkidIntensity(float LongitudinalScale, float La
 	float PowerY = FMath::Abs(ForceY * SlipVelY * LateralScale);
 
 	// Get total power
-	const float Bias = TireConfig.CombinedSlipBias;
+	const float Bias = 0.5f; // Balanced diagnostic weighting; not a force tuning knob.
 	float TotalPower = (1.f - Bias) * PowerX + Bias * PowerY;
 
 	float NormalizedSkid = TotalPower / FMath::Max(MaxSkidPowerThreshold, SMALL_NUMBER);
@@ -715,7 +714,7 @@ float UVehicleWheelComponent::GetNormalizedSlip(float LongitudinalScale, float L
 	Cy = Cy > SMALL_NUMBER ? Cy : 1.f;
 
 	// get weight
-	const float Bias = TireConfig.CombinedSlipBias;
+	const float Bias = 0.5f; // Balanced diagnostic weighting; not a force tuning knob.
 	float Wx = (1.f - Bias) * Cx;
 	float Wy = (Bias) * Cy;
 

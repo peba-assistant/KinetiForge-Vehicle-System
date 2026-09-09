@@ -57,6 +57,9 @@ protected:
 	FVehicleWheelConfig WheelConfig;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Setup")
 	FVehicleTireConfig TireConfig;
+	TAtomic<double> RequestedOperatingPressurePa{220000};
+	TAtomic<double> RequestedSlideAssistance{0};
+	TAtomic<double> RequestedReferenceMuX{0}, RequestedReferenceMuY{0};
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Setup")
 	FVehicleABSConfig ABSConfig;
 
@@ -196,6 +199,10 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "VehicleWheel")
 	void SetTireConfig(const FVehicleTireConfig& NewConfig);
+	// Pressure changes do not rebuild force LUTs. Same input boundary as SetTireConfig.
+	void SetReferencePeakGrip(double X,double Y) { RequestedReferenceMuX.Store(X); RequestedReferenceMuY.Store(Y); }
+	void SetSlideAssistance(double Value) { RequestedSlideAssistance.Store(FMath::Clamp(Value,0.,3.)); }
+	void SetOperatingTirePressure(double PressurePa) { RequestedOperatingPressurePa.Store(PressurePa); }
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "VehicleWheel")
 	const FVehicleABSConfig& GetABSConfig() { return ABSConfig; }

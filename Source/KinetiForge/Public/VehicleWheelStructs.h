@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "VehicleUtilities.h"
+#include <previs/tire_response.hpp>
 #include "VehicleWheelStructs.generated.h"
 
 UENUM(BlueprintType)
@@ -44,6 +45,10 @@ USTRUCT(BlueprintType)
 struct KINETIFORGE_API FVehicleTireConfig
 {
 	GENERATED_BODY()
+
+	// Resolved immutable tyre data; current gauge pressure is a separate wheel input.
+	previs::tire::response::Profile ResponseProfile;
+	double OperatingPressurePa = 220000;
 
 	/**
 	* Overall grip multiplier for this tire.
@@ -104,30 +109,6 @@ struct KINETIFORGE_API FVehicleTireConfig
 	float LoadForceRatioAtDoubleLoadLat = 0.f;
 
 	/**
-	* Balances grip between turning and accelerating.
-	* 0.5 = Balanced.
-	* >0.5 = Prioritizes Turning (Easier to corner while braking).
-	* <0.5 = Prioritizes Acceleration.
-	*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0", ClampMax = "1.0", DisplayName = "Grip Distribution Bias"))
-	float CombinedSlipBias = 0.5f;
-
-	/**
-	* How much longitudinal slip (spinning) reduces lateral grip.
-	* 1.0 = Realistic (Spinning wheels can't turn).
-	* 0.0 = Arcade (Full turning grip even when burning out).
-	*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0", ClampMax = "1.0", DisplayName = "Accel Affects Turning"))
-	float LongitudinalToLateralInterference = 1.f;
-
-	/**
-	* How much lateral slip (drifting) reduces forward acceleration.
-	* Lower values (e.g., 0.8) make it easier to maintain speed while drifting.
-	*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0", ClampMax = "1.0", DisplayName = "Turning Affects Accel"))
-	float LateralToLongitudinalInterference = 1.f;
-
-	/**
 	* Scales the Fx curve output. Determines max longitudinal force.
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0", DisplayName = "Longitudinal Grip Limit"))
@@ -152,25 +133,6 @@ struct KINETIFORGE_API FVehicleTireConfig
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (DisplayName = "Curve: Fy (Lateral)"))
 	UCurveFloat* Fy = nullptr;
-
-	/**
-	* Input: abs camber angle in degrees.
-	* Output: lateral drift per rolling distance, dy / dx.
-	*
-	* This is not a force scale.
-	* This is not a constant lateral velocity.
-	*
-	* The solver converts it to lateral slip velocity:
-	*
-	*     CamberSlipVelocityY = RollSpeed * CamberLateralDrift
-	*
-	* Example:
-	*     Camber = 5 deg
-	*     Curve output = 0.01
-	*     means the contact patch tends to drift 1 cm laterally per 1 m rolling distance.
-	*/
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (DisplayName = "Curve: Camber To Lateral Drift"))
-	UCurveFloat* CamberToLateralDrift = nullptr;
 
 	/*
 	* #494: HOW MUCH GRIP THE TYRE HAS AT THIS CAMBER, as a multiplier on the friction envelope.
@@ -226,6 +188,7 @@ public:
 	int32 OptimalSlipIndex = 0;
 	float LinearStiffness = 0.f;
 	float PeakFriction = 0.f;
+	float OriginSlope = 0.f;
 
 	FVehicleTireLUT(const float InitValue = 0.f) : FVehicleLUT<NumSamples>(InitValue)
 	{
@@ -236,6 +199,15 @@ public:
 		BuildFromCurve(RichCurve, SelectedTimeInterval);
 	}
 
+    void SetEstimatedShape(float Slope) {
+        for(int i=0;i<NumSamples;++i) {
+            const double r=Slope*i/double(NumSamples-1);
+            this->Samples[i]=FMath::Sin(1.3*FMath::Atan(r/1.3));
+        }
+        PeakFriction=1; OriginSlope=Slope;
+        OptimalSlipIndex=0;
+        for(int i=1;i<NumSamples;++i) if(this->Samples[i]>this->Samples[OptimalSlipIndex]) OptimalSlipIndex=i;
+    }
 	void BuildFromCurve(const FRichCurve& RichCurve, const FVector2f SelectedTimeInterval = FVector2f(0.f, 1.f))
 	{
 		// Call the superclass method to copy the data and populate the `Samples` array
@@ -244,6 +216,7 @@ public:
 		bHasValidStiffness = false;
 		LinearStiffness = 0.f;
 		PeakFriction = 0.f;
+        OriginSlope=0; OptimalSlipIndex=0;
 
 		if (RichCurve.Keys.Num() == 0) return;
 
@@ -267,52 +240,13 @@ public:
 			}
 		}
 
-		const float StartValue = this->Samples[0];
-		const float EndValue = this->Samples[NumSamples - 1];
+		OriginSlope = FMath::Max(0.f, (this->Samples[1]-this->Samples[0])*(NumSamples-1));
+        OptimalSlipIndex=0;
+        for(int32 i=1;i<NumSamples;++i)
+            if(this->Samples[i]>this->Samples[OptimalSlipIndex]) OptimalSlipIndex=i;
+        LinearStiffness=OriginSlope;
+        bHasValidStiffness=OriginSlope>SMALL_NUMBER;
 
-		// Finding the Optimal Slip Using the Maximum Deviation Method
-		const float SecantSlope = (EndValue - StartValue) / (float)(NumSamples - 1);
-
-		float MaxDeviation = -1.f;
-		int32 OptimalLocalIndex = 0;
-
-		for (int32 i = 0; i < NumSamples; i++)
-		{
-			float CurrentY = this->Samples[i];
-			float SecantY = StartValue + SecantSlope * i;
-			float Deviation = CurrentY - SecantY;
-
-			if (Deviation > MaxDeviation)
-			{
-				MaxDeviation = Deviation;
-				OptimalLocalIndex = i;
-			}
-		}
-
-		// cache optimal slip
-		OptimalSlipIndex = OptimalLocalIndex;
-
-		// try to find stiffness of linear region
-		float MaxLocalStiffness = 0.f;
-		for (int32 i = 0; i < OptimalSlipIndex; i++)
-		{
-			float CurrentY = this->Samples[i];
-			float NextY = this->Samples[i + 1];
-			float LocalStiffness = (NextY - CurrentY) * (float)(NumSamples - 1);
-
-			if (LocalStiffness > MaxLocalStiffness)
-			{
-				MaxLocalStiffness = LocalStiffness;
-			}
-		}
-
-		LinearStiffness = MaxLocalStiffness;
-
-		// Check if stiffness is valid
-		if (LinearStiffness > SMALL_NUMBER)
-		{
-			bHasValidStiffness = true;
-		}
 	}
 };
 
@@ -321,18 +255,18 @@ struct KINETIFORGE_API FVehicleWheelCachedLUTs
 {
 	GENERATED_BODY()
 
-	FVehicleTireLUT<64> Fx = FVehicleTireLUT<64>(1.f);
-	FVehicleTireLUT<64> Fy = FVehicleTireLUT<64>(1.f);
-	FVehicleLUT<64> CamberToLateralDrift = FVehicleLUT<64>(0.f);
+	FVehicleTireLUT<1024> Fx = FVehicleTireLUT<1024>(1.f);
+	FVehicleTireLUT<1024> Fy = FVehicleTireLUT<1024>(1.f);
+
 	//: #494: 1.0 is "camber changes nothing", so an unstated curve leaves the tyre exactly as it was.
-	FVehicleLUT<64> CamberToGripFactor = FVehicleLUT<64>(1.f);
+	FVehicleLUT<1024> CamberToGripFactor = FVehicleLUT<1024>(1.f);
 };
 
 USTRUCT(BlueprintType, meta = (ToolTip = "wheel state in simulation"))
 struct KINETIFORGE_API FVehicleWheelSimState
 {
 	GENERATED_BODY()
-	
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Movement")
 	float EffectiveInertia = 1.f;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Movement")
@@ -351,6 +285,16 @@ struct KINETIFORGE_API FVehicleWheelSimState
 	float PredictedSlipRatio = 0.f;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Movement")
 	float SignedCamberDegree = 0.f;
+	// Production diagnostics; raw kinematic slip channels retain their previous meaning.
+	double RawCamberRad = 0, PressurePa = 220000;
+	uint64 ResponseProfileId = 0;
+	FVector2f PeakForce = FVector2f(0), ForceStiffness = FVector2f(0), TargetForce = FVector2f(0);
+	double CamberTransport = 0, CamberStiffness = 0, ImpulseScale = 1, GroundWorkResidual = 0;
+	double LocalImpulseEnergy = 0, LowSpeedBlend = 0;
+	double PeakSlipRatio = 0, PeakSlipAngleRad = 0, SlideAssistance = 0;
+	double ReferenceMuX = 0, ReferenceMuY = 0;
+	double EffectivePeakSlipRatio = .1;
+	bool bResponseValid = true, bResponseExtrapolated = false;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Movement")
 	float DynFrictionMultiplier = 1.f;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Movement")
@@ -400,6 +344,8 @@ struct KINETIFORGE_API FVehicleWheelSimContext
 	FVector3f LatForceDir = FVector3f(0.f);
 
 	float CamberLateralDrift = 0.f;
+	previs::tire::response::Response Response;
+	FVector2f PeakForce = FVector2f(0), ForceStiffness = FVector2f(0);
 
 	float AvailableGrip = 0.f;
 	//: ADR-031: the same with the LATERAL exponent. A tyre's two directions lose grip with load at
