@@ -20,7 +20,8 @@ void UVehicleGearboxComponent::BeginPlay()
 	Super::BeginPlay();
 
 	// ...
-	CalculateGearRatios();	//to avoid nullptr
+	//: F1: BeginPlay also calls the synthesiser, so it must not run once explicit ratios are in.
+	if (!bHasExplicitGearRatios) CalculateGearRatios();	//to avoid nullptr
 }
 
 void UVehicleGearboxComponent::StartShift(int32 InTargetGear, bool bImmediate)
@@ -240,7 +241,23 @@ bool UVehicleGearboxComponent::SetExplicitGearRatios(const TArray<float>& Forwar
 	// The config stays exactly what SetConfig wrote (a read-back audit compares it); only the
 	// ratio arrays change, and only when the source states one ratio per configured gear.
 	if (ForwardRatios.Num() != Config.NumberOfGears || ReverseRatios.Num() != Config.NumOfReverseGears) return false;
-	CalculateGearRatios();	// refreshes the dirty-check cache so the explicit arrays are not recomputed away
+	//: F1 (Codex review, 2026-09-10). The line here used to be `CalculateGearRatios()` with a comment
+	//: claiming it refreshed the dirty-check cache. IT DOES NOT: only IsGearDataDirty() writes
+	//: CachedFirstGear and its siblings, and on a fresh component those are -1. So the first shift
+	//: request or speed-range calculation found the data dirty and SYNTHESISED the ratios back over
+	//: the source's own. MEASURED on the E30, whose package states 3.72/2.40/1.77/1.26/1.00:
+	//:   Previs.F1: gear ratios RECOMPUTED on a shift:
+	//:     [3.720 2.400 1.770 1.260 1.000] -> [3.720 2.360 1.797 1.364 1.000]
+	//: - fourth gear 8 % wrong, on every car, from its first shift onward.
+	//:
+	//: IsGearDataDirty() is called for its SIDE EFFECT: it copies the current config into the cache,
+	//: so the arrays installed below are not recomputed away. FirstGear, TopGear and GearRatioBias
+	//: only ever feed the synthesiser, and explicit ratios make them irrelevant; a change to the GEAR
+	//: COUNTS does still invalidate them, which is correct, because a five-gear array cannot serve a
+	//: six-gear box - and SetExplicitGearRatios refuses that mismatch at the top of this function.
+	CalculateGearRatios();	//: sizes the arrays, as before
+	IsGearDataDirty();		//: FOR THE SIDE EFFECT - primes the cache so the explicit arrays stand
+	bHasExplicitGearRatios = true;
 	GearRatios = ForwardRatios;
 	for (float& R : GearRatios) R = FMath::Abs(R);
 	ReverseGearRatios = ReverseRatios;

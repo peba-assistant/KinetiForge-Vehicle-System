@@ -54,6 +54,8 @@ protected:
 	bool bShouldCutSpark = false;
 
 	//cache
+	//: F1 (2026-09-10): the source stated its own ratios, so the synthesiser must not run again.
+	bool bHasExplicitGearRatios = false;
 	float CachedFirstGear = -1;
 	float CachedTopGear = -1;
 	float CachedGearRatioBias = -1;
