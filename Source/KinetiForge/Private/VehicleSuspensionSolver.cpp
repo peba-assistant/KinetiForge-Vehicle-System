@@ -1163,7 +1163,16 @@ void FVehicleSuspensionSolver::UpdateStrutLength(
 				: GetDigressiveDamping(CompDamp, CompDampFast, SpringConfig.CompressionKneeSpeed, AbsPredicted);
 
 			// 隐式阻尼项: C * dt / m
-			float ImplicitDampingTerm = EquivDamp * SubDt * VirtualUnsprungMassInv;
+			//: F2 (Codex review, 2026-09-10): this term was the ONLY one in the integrator without the
+			//: cm conversion. Strut displacement and velocity are in cm and cm/s, so the damper
+			//: coefficient after ratio conversion is N*s/cm - GetCriticalDamping returns the SI
+			//: critical coefficient divided by 100. The predicted-velocity line above and the spring
+			//: term below both carry m_to_cm and the spring term's own comment says it must; this one
+			//: did not, so the damping in this integrator was a HUNDREDTH of what was asked for and
+			//: every car ran a virtually undamped unsprung mass. bSimulateUnsprungMass is
+			//: SuspensionAndBrakeMass > 0, which the Drive mapping sets from suspension.unsprung_mass
+			//: on every car, so this ran everywhere.
+			float ImplicitDampingTerm = EquivDamp * SubDt * VirtualUnsprungMassInv * m_to_cm;
 
 			// 隐式刚度项: K * dt^2 / m (需要带上和加速度相同的 100.f 单位换算)
 			float ImplicitSpringTerm = TotalStiffness * VirtualUnsprungMassInv * SubDt * SubDt * m_to_cm;
@@ -2063,6 +2072,17 @@ void FVehicleSuspensionSolver::ComputeAntiPitchRollGeometry(
 	float FinalAntiRollRatio = GeomAntiRollRatio + LUT_AntiRollRatio;
 	Ctx.AntiPitchScale = FinalAntiPitchRatio;
 	Ctx.AntiRollScale = FinalAntiRollRatio;
+
+	float FinalPitchSlope = FinalAntiPitchRatio * UVehicleUtilities::SafeDivide(TrueCOMHeight, DynamicLx);
+	float FinalRollSlope = FinalAntiRollRatio * UVehicleUtilities::SafeDivide(TrueCOMHeight, DynamicLy);
+
+	float JackingForceChassisZ = (TireForceChassis.X * FinalPitchSlope) + (TireForceChassis.Y * FinalRollSlope);
+
+	FVector ChassisUpWorld = AsyncChassisWorldTransform.GetRotation().GetUpVector();
+	float UpDotNormal = FMath::Max(0.1f, FVector::DotProduct(ChassisUpWorld, Ctx.HitResult.Normal));
+
+	Ctx.JackingForce = JackingForceChassisZ * UpDotNormal;
+	Ctx.ForceAlongImpactNormal += Ctx.JackingForce;
 	//: **WHAT THE ANTI TERMS ACTUALLY ARE, SAID ONCE PER CORNER (Previs, owner 2026-09-10: "anti
 	//: dive and anti squat has to be implemented for every car using irl numbers ... also anti roll
 	//: is very much needed against irl numbers").** These four numbers decide how much of the
@@ -2088,23 +2108,12 @@ void FVehicleSuspensionSolver::ComputeAntiPitchRollGeometry(
 			UE_LOG(LogTemp, Verbose,
 				TEXT("Previs.Anti: corner lx=%.3f ly=%.3f comH=%.3f | geom pitch-slope=%.4f roll-slope=%.4f "
 					 "| geom anti pitch=%.4f roll=%.4f | LUT anti pitch=%.4f roll=%.4f | final pitch=%.4f roll=%.4f "
-					 "| jacking=%.1f N"),
+					 "| jacking=%.1f N | tyre force chassis x=%.1f y=%.1f"),
 				DynamicLx, DynamicLy, TrueCOMHeight, GeomPitchSlope, GeomRollSlope,
 				GeomAntiPitchRatio, GeomAntiRollRatio, LUT_AntiPitchRatio, LUT_AntiRollRatio,
-				FinalAntiPitchRatio, FinalAntiRollRatio, Ctx.JackingForce);
+				FinalAntiPitchRatio, FinalAntiRollRatio, Ctx.JackingForce, TireForceChassis.X, TireForceChassis.Y);
 		}
 	}
-
-	float FinalPitchSlope = FinalAntiPitchRatio * UVehicleUtilities::SafeDivide(TrueCOMHeight, DynamicLx);
-	float FinalRollSlope = FinalAntiRollRatio * UVehicleUtilities::SafeDivide(TrueCOMHeight, DynamicLy);
-
-	float JackingForceChassisZ = (TireForceChassis.X * FinalPitchSlope) + (TireForceChassis.Y * FinalRollSlope);
-
-	FVector ChassisUpWorld = AsyncChassisWorldTransform.GetRotation().GetUpVector();
-	float UpDotNormal = FMath::Max(0.1f, FVector::DotProduct(ChassisUpWorld, Ctx.HitResult.Normal));
-
-	Ctx.JackingForce = JackingForceChassisZ * UpDotNormal;
-	Ctx.ForceAlongImpactNormal += Ctx.JackingForce;
 }
 
 void FVehicleSuspensionSolver::CalculateImpactPointWorldVelocity(
