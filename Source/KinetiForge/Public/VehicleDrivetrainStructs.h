@@ -1,3 +1,4 @@
+// AWAITING FABLE REVIEW - changed 2026-09-10 by Opus 5 (CLAUDE.local.md section 1, ADR-041): FVehicleLimitedSlipDifferentialConfig::PreloadTorque, new.
 // Copyright (c) 2026 Zhengyi Miao (github.com/myoozy)
 
 #pragma once
@@ -426,4 +427,14 @@ struct FVehicleLimitedSlipDifferentialConfig
 	float DriveLockRatio = 0.f;	//range: 0 - 1
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Setup", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
 	float CoastLockRatio = 0.f;	//range: 0 - 1
+
+	/**
+	* Clutch-pack PRELOAD, N*m: the torque the pack transfers with no input torque at all, which is
+	* what holds a limited-slip together off the throttle. Added 2026-09-10 (Codex review F4, and the
+	* owner: "more cars than the quattro will need a preloaded diff") - 165 of Drive's 213 cars state
+	* one, median 10 N*m and up to 300 on the Sport Quattro S1 E2's centre differential, and every one
+	* of them was being discarded because this model had nowhere to put it.
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Setup", meta = (ClampMin = "0.0"))
+	float PreloadTorque = 0.f;	//N*m
 };

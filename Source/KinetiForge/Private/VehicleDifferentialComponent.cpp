@@ -1,3 +1,4 @@
+// AWAITING FABLE REVIEW - changed 2026-09-10 by Opus 5 (CLAUDE.local.md section 1, ADR-041): the clutch-pack LSD: bounded capacity preload + lock x |torque| replacing a per-substep velocity correction (Codex F4).
 // Copyright (c) 2026 Zhengyi Miao (github.com/myoozy)
 
 
@@ -273,15 +274,37 @@ void UVehicleDifferentialComponent::GetOutputTorque(
 	bool bIsDrive = (OpenDiffTorque * AverageAngularVelocity) >= 0.f;
 	float CurrentLockRatio = bIsDrive ? Config.DriveLockRatio : Config.CoastLockRatio;
 
-	//calculate the torque required for both sides to match the average angular velocity
-
 	float ReducedInertia = UVehicleUtilities::SafeDivide(
 		InLeftTotalInertia * InRightTotalInertia, InLeftTotalInertia + InRightTotalInertia);
 
 	float OmegaDiff = InLeftAngularVelocity - InRightAngularVelocity;
 
-	float MaxTransferTorque = UVehicleUtilities::SafeDivide(ReducedInertia * OmegaDiff, InDeltaTime);
-	float TransferTorque = MaxTransferTorque * CurrentLockRatio;
+	// A CLUTCH-PACK LIMITED SLIP, not a per-substep velocity correction (2026-09-10, Codex review
+	// F4). What stood here removed CurrentLockRatio of the speed difference EVERY SUBSTEP:
+	//
+	//     TransferTorque = ReducedInertia * OmegaDiff / dt * CurrentLockRatio
+	//
+	// so the difference decayed as (1 - lock)^n and the strength depended on the SUBSTEP COUNT
+	// rather than on the differential. At 240 Hz a stated 0.6 leaves 0.4 % of the difference after
+	// 25 ms: every partially-locked differential in the fleet behaved as fully locked. Drive's owner
+	// found it from the driver's seat on an Audi Sport Quattro S1 E2 - three differentials stating
+	// 0.4 to 0.6, a car that would not rotate - before reading any of this code.
+	//
+	// The pack instead carries a BOUNDED torque, which is what a clutch pack physically does:
+	//
+	//     capacity = preload + lock_ratio * |input torque|
+	//
+	// preload holds it together with no input at all, and the ratio is the torque-sensitive part.
+	// The transfer opposes the speed difference, so its work is never positive and the two outputs
+	// stay equal and opposite. None of that mentions dt.
+	//
+	// The old expression survives as a NUMERICAL CAP and nothing more: a pack cannot transfer more
+	// than would equalise the two shafts within this step, or it overshoots and rings.
+	const float Capacity = FMath::Max(Config.PreloadTorque, 0.f)
+		+ FMath::Clamp(CurrentLockRatio, 0.f, 1.f) * FMath::Abs(Config.GearRatio * InTorque);
+	const float NoOvershoot = FMath::Abs(
+		UVehicleUtilities::SafeDivide(ReducedInertia * OmegaDiff, InDeltaTime));
+	const float TransferTorque = FMath::Sign(OmegaDiff) * FMath::Min(Capacity, NoOvershoot);
 
 	OutLeftTorque = OpenDiffTorque - TransferTorque;
 	OutRightTorque = OpenDiffTorque + TransferTorque;

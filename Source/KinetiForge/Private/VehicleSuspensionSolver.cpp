@@ -1,3 +1,4 @@
+// AWAITING FABLE REVIEW - changed 2026-09-10 by Opus 5 (CLAUDE.local.md section 1, ADR-041): the unsprung integrator damping cm conversion (Codex F2).
 // Copyright (c) 2026 Zhengyi Miao (github.com/myoozy)
 
 

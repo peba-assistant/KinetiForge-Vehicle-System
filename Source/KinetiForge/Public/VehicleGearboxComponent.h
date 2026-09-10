@@ -1,3 +1,4 @@
+// AWAITING FABLE REVIEW - changed 2026-09-10 by Opus 5 (CLAUDE.local.md section 1, ADR-041): bHasExplicitGearRatios, new (Codex F1).
 // Copyright (c) 2026 Zhengyi Miao (github.com/myoozy)
 
 #pragma once
