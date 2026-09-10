@@ -120,7 +120,16 @@ void FVehicleWheelSolver::PreStep(
         Grip(TireConfig.FrictionMultiplier,TireConfig.LoadForceRatioAtDoubleLoadLat,LocalState.WheelLoad)*TireConfig.MaxFy*CachedLUTs.Fy.OriginSlope/(PI/2)*Context.Response.stiffness_y);
     const double Cgamma0=Grip(TireConfig.FrictionMultiplier,TireConfig.LoadForceRatioAtDoubleLoadLat,P.reference_load)*TireConfig.MaxFy*CachedLUTs.Fy.OriginSlope/(PI/2)*P.camber_stiffness_ratio;
     LocalState.CamberStiffness=Cgamma0*Context.Response.camber_scale;
-    Context.CamberLateralDrift=previs::tire::response::camber_transport(Context.ForceStiffness.Y,
+    //: **MODE 0 MEANS CAMBER DOES NOTHING, and the THRUST is camber too** (Previs, 2026-09-10). The
+    //: switch as first built silenced only the grip CURVE, so mode 0 was never a clean control: the
+    //: coupled model's camber transport - a lateral patch velocity proportional to camber, which
+    //: enters the slip rather than the force - kept running. That matters for the open question it
+    //: was built to answer: at the limit the E30's moment balance implies a centre of mass 4.7 % of
+    //: the wheelbase forward of where its static weight puts it, and an uncancelled rear camber
+    //: thrust is the prime suspect (its inside rear sits at -4.8 degrees of road-relative camber
+    //: against the outside rear's +0.2, and thrust scales with camber, so the pair does not cancel).
+    //: Mode 0 now takes the thrust with it, which makes the test possible.
+    Context.CamberLateralDrift=CamberMode<=0?0.f:previs::tire::response::camber_transport(Context.ForceStiffness.Y,
         LocalState.CamberStiffness,Context.Response.gamma,P.transport_limit);
     if(!ContactValid || !Context.Response.valid) {
         Context.PeakForce=FVector2f(0); Context.ForceStiffness=FVector2f(0);

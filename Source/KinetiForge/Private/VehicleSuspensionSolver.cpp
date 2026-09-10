@@ -2,6 +2,7 @@
 
 
 #include "VehicleSuspensionSolver.h"
+#include "HAL/IConsoleManager.h"
 #include "VehicleWheelComponent.h"
 #include "AsyncTickFunctions.h"
 #include "VehicleUtilities.h"
@@ -2062,6 +2063,37 @@ void FVehicleSuspensionSolver::ComputeAntiPitchRollGeometry(
 	float FinalAntiRollRatio = GeomAntiRollRatio + LUT_AntiRollRatio;
 	Ctx.AntiPitchScale = FinalAntiPitchRatio;
 	Ctx.AntiRollScale = FinalAntiRollRatio;
+	//: **WHAT THE ANTI TERMS ACTUALLY ARE, SAID ONCE PER CORNER (Previs, owner 2026-09-10: "anti
+	//: dive and anti squat has to be implemented for every car using irl numbers ... also anti roll
+	//: is very much needed against irl numbers").** These four numbers decide how much of the
+	//: weight transfer goes through the LINKS instead of the springs, and nothing has ever printed
+	//: them. Two questions ride on them and neither can be answered from outside:
+	//:
+	//:   * the GEOMETRIC pair is built from the car's own hardpoints, and an offline
+	//:     reimplementation of that construction gave meaningless rear-axle values and pro-dive
+	//:     fronts on three cars of five - so either that reimplementation or the hardpoints are
+	//:     wrong, and the fork uses the hardpoints;
+	//:   * the LUT pair comes from a curve NOBODY STATES. Assetto declares no anti-dive, anti-squat
+	//:     or anti-roll, so the package carries none, and UVehicleWheelComponent then loads this
+	//:     plugin's DEMO curve assets onto every car. If those are non-zero, every car in the fleet
+	//:     carries invented anti-geometry added on top of its real one.
+	//:
+	//: Printed once per corner per second at Verbose, which is enough to read a settled car and
+	//: little enough to leave on. `previs.susp.anti.log 0` silences it.
+	{
+		static const auto* const AntiLog =
+			IConsoleManager::Get().FindConsoleVariable(TEXT("previs.susp.anti.log"));
+		if (AntiLog == nullptr || AntiLog->GetInt() != 0)
+		{
+			UE_LOG(LogTemp, Verbose,
+				TEXT("Previs.Anti: corner lx=%.3f ly=%.3f comH=%.3f | geom pitch-slope=%.4f roll-slope=%.4f "
+					 "| geom anti pitch=%.4f roll=%.4f | LUT anti pitch=%.4f roll=%.4f | final pitch=%.4f roll=%.4f "
+					 "| jacking=%.1f N"),
+				DynamicLx, DynamicLy, TrueCOMHeight, GeomPitchSlope, GeomRollSlope,
+				GeomAntiPitchRatio, GeomAntiRollRatio, LUT_AntiPitchRatio, LUT_AntiRollRatio,
+				FinalAntiPitchRatio, FinalAntiRollRatio, Ctx.JackingForce);
+		}
+	}
 
 	float FinalPitchSlope = FinalAntiPitchRatio * UVehicleUtilities::SafeDivide(TrueCOMHeight, DynamicLx);
 	float FinalRollSlope = FinalAntiRollRatio * UVehicleUtilities::SafeDivide(TrueCOMHeight, DynamicLy);
