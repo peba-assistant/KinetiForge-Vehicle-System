@@ -81,6 +81,21 @@ void FVehicleWheelSolver::PreStep(
             TireConfig.LoadSensitivityReferenceLoad,Ratio);
     };
     const float G0=FMath::Max(CachedLUTs.CamberToGripFactor.FastEval(0).Value,SMALL_NUMBER);
+    //: **HOW MUCH CAMBER IS ALLOWED TO DO, LIVE (Previs, owner 2026-09-10: "something in the drive
+    //: feel has gotten lost, that the first camber adjustment fixed: very much understeer and hard
+    //: to control slides", on the F40, the RUF, the X-Bow and the Cayman alike).** Three things
+    //: happened to camber in three days: #494 gave it a per-tyre curve on BOTH envelopes; #482 H1
+    //: found Assetto's sign flipped and turned the gain into a loss; the coupled model then applied
+    //: the curve to the LATERAL envelope only. His hands say the car lost something real. This
+    //: switch is how he settles it without a rebuild between tries:
+    //:   0 - camber changes no grip at all (the control)
+    //:   1 - as it is now: the curve on the lateral envelope only
+    //:   2 - the curve on BOTH envelopes, which is #494's behaviour
+    //: It is a MEASUREMENT INSTRUMENT, not a tuning knob: whichever he picks, the answer is a fix
+    //: in the data or in the sign, not a setting left on 2.
+    static const auto* const CamberGripMode =
+        IConsoleManager::Get().FindConsoleVariable(TEXT("previs.camber.grip"));
+    const int32 CamberMode = CamberGripMode != nullptr ? CamberGripMode->GetInt() : 1;
     //: THE IMPORTED CURVE IS READ AT THE ANGLE THE WHEEL IS ACTUALLY AT (Previs, GPT-6 Astra's
     //: merge review: "decide explicitly whether the fitted-model domain limit should also truncate
     //: an independently supplied curve"). It should not. `Response.gamma` is clamped to +/-12
@@ -90,8 +105,10 @@ void FVehicleWheelSolver::PreStep(
     //: and this one reads the raw angle, capped only at the curve's own domain.
     const float Gy=FMath::Max(0.f,CachedLUTs.CamberToGripFactor.FastEval(
         FMath::Min(FMath::Abs(LocalState.RawCamberRad),float(PI/2))/float(PI/2)).Value/G0);
-    Context.AvailableGrip=Grip(LocalState.DynFrictionMultiplier,TireConfig.LoadForceRatioAtDoubleLoadLong,LocalState.WheelLoad)*Context.Response.grip_x;
-    Context.AvailableGripLat=Grip(LocalState.DynFrictionMultiplier,TireConfig.LoadForceRatioAtDoubleLoadLat,LocalState.WheelLoad)*Context.Response.grip_y*Gy;
+    const float GyLong=CamberMode>=2?Gy:1.f;
+    const float GyLat=CamberMode>=1?Gy:1.f;
+    Context.AvailableGrip=Grip(LocalState.DynFrictionMultiplier,TireConfig.LoadForceRatioAtDoubleLoadLong,LocalState.WheelLoad)*Context.Response.grip_x*GyLong;
+    Context.AvailableGripLat=Grip(LocalState.DynFrictionMultiplier,TireConfig.LoadForceRatioAtDoubleLoadLat,LocalState.WheelLoad)*Context.Response.grip_y*GyLat;
     Context.PeakForce=FVector2f(Context.AvailableGrip*TireConfig.MaxFx*CachedLUTs.Fx.PeakFriction,
         Context.AvailableGripLat*TireConfig.MaxFy*CachedLUTs.Fy.PeakFriction);
     // Fit peak coefficient independently of source initial slope. No duplicate vehicle
