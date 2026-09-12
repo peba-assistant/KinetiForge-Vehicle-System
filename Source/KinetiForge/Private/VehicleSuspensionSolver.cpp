@@ -2343,10 +2343,19 @@ void FVehicleSuspensionSolver::ComputeSuspensionForce(
 	NormalForceToHoldCar *= ConstraintScale;
 
 	// spring preload
+	//: AWAITING FABLE REVIEW - changed 2026-09-12 by Opus 5 (Drive CLAUDE.local.md section 1, #433): the preload
+	//: was capped at the POINT effective mass's weight - the inverse-inertia response at the contact, about half
+	//: a corner's static share - so any car whose preload seats more than that rested above its design pose
+	//: (the 4C 5.4 / 7.5 cm, the Cobra 5.6 / 5.1, the E30 4.1 / 2.4) with the spring carrying the rest. A real
+	//: preloaded coil pushes with its preload until the droop stop, bounded by the STATIC load the corner
+	//: carries; the cap is that load now (the dynamic stopping term kept), and the spring's own limits above
+	//: still ride the effective mass.
+	float StaticSprungWeight = UVehicleUtilities::SafeDivide(WorldGravityZ * Ctx.StaticSprungMass, NormalProjOnWorldUp);
+	float NormalForceToSeatPreload = (FMath::Max(ForceToCancelOutSprungWeight, StaticSprungWeight) + ForceToStopSprungMass * ImpulseConstraintScale) * ConstraintScale;
 	float FullPreloadAlongSpring = SpringConfig.SpringPreload * MotionRatio;
 	float StrutProjOnNormal = FVector::DotProduct(Ctx.StrutWorldDirection, Ctx.HitResult.Normal);
 	float RawPreloadAlongNormal = StrutProjOnNormal * FullPreloadAlongSpring;
-	float ValidPreloadAlongNormal = FMath::Max(0.f, FMath::Min(NormalForceToHoldCar, RawPreloadAlongNormal));
+	float ValidPreloadAlongNormal = FMath::Max(0.f, FMath::Min(NormalForceToSeatPreload, RawPreloadAlongNormal));
 
 	Ctx.ForceAlongImpactNormal += ValidPreloadAlongNormal;
 
