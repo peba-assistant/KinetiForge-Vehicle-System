@@ -105,4 +105,6 @@ public:
 	void GetOpenDiffOutputTorque(float InTorque, float& OutTorqueLeft, float& OutTorqueRight);
 
 	float GetInputShaftVelocity(float OutputShaftAngularVelocityLeft, float OutputShaftAngularVelocityRight);
+	//: Drive 2026-09-12: the kf.diff.trace accumulator
+	float TraceAccumulator = 0.f;
 };

@@ -1,3 +1,4 @@
+// AWAITING FABLE REVIEW - changed 2026-09-12 by Opus 5 (Drive CLAUDE.local.md section 1): kf.diff.trace logs each differential's split, so the centre's bias can be read off a run.
 // AWAITING FABLE REVIEW - changed 2026-09-10 by Opus 5 (CLAUDE.local.md section 1, ADR-041): the clutch-pack LSD: bounded capacity preload + lock x |torque| replacing a per-substep velocity correction (Codex F4).
 // Copyright (c) 2026 Zhengyi Miao (github.com/myoozy)
 
@@ -6,6 +7,9 @@
 #include "VehicleAxleAssemblyComponent.h"
 #include "VehicleWheelComponent.h"
 #include "VehicleUtilities.h"
+#include "HAL/IConsoleManager.h"
+
+static TAutoConsoleVariable<int32> CVarDiffTrace(TEXT("kf.diff.trace"), 0, TEXT("1 = log every differential's input and outputs at 20 Hz (Drive 2026-09-12: the Torsen split, verified)"));
 
 // Sets default values for this component's properties
 UVehicleDifferentialComponent::UVehicleDifferentialComponent()
@@ -48,6 +52,24 @@ void UVehicleDifferentialComponent::UpdateOutputShaft(float InDriveTorque, float
 			OutLeftTorque,
 			OutRightTorque
 		);
+
+	//: THE SPLIT, SAID (Drive, 2026-09-12: the owner asked that the Torsen centre "distributes power
+	//: correctly automatically front rear" be VERIFIED, and no take carries a differential's outputs):
+	//: `kf.diff.trace 1` logs every differential's input and two outputs at 20 Hz, with the speed
+	//: difference the pack is opposing, so a split-grip run shows the bias as it happens. Off by default.
+	if (CVarDiffTrace.GetValueOnAnyThread()  /* the physics thread asks */ != 0)
+	{
+		TraceAccumulator += InDeltaTime;
+		if (TraceAccumulator >= 0.05f)
+		{
+			TraceAccumulator = 0.f;
+			const float Total = FMath::Abs(OutLeftTorque) + FMath::Abs(OutRightTorque);
+			UE_LOG(LogTemp, Log, TEXT("KF.Diff '%s': in %.0f N.m x %.2f -> left %.0f / right %.0f N.m (%.0f %% / %.0f %%), speeds %.1f / %.1f rad/s, lock %.2f/%.2f preload %.0f"),
+			       *GetName(), InDriveTorque, Config.GearRatio, OutLeftTorque, OutRightTorque,
+			       Total > 1.f ? 100.f * FMath::Abs(OutLeftTorque) / Total : 50.f, Total > 1.f ? 100.f * FMath::Abs(OutRightTorque) / Total : 50.f,
+			       InLeftAngularVelocity, InRightAngularVelocity, Config.DriveLockRatio, Config.CoastLockRatio, Config.PreloadTorque);
+		}
+	}
 	
 	//update inertia
 	OutReflectedInertiaEachWheel = 0.5 * InReflectedInertia * Config.GearRatio * Config.GearRatio;
@@ -102,6 +124,32 @@ int32 UVehicleDifferentialComponent::SubstepTransferCase(
 
 	// update axles
 	float DriveTorque = Config.GearRatio * InGearboxOutputTorque;
+
+	//: THE CENTRE IS A CLUTCH PACK TOO (Drive, 2026-09-12; ADR-041 reached the axle differentials on
+	//: 2026-09-10 and never this path). What stood here moved `lock x inertia x speed difference / dt`
+	//: EVERY substep - the per-substep velocity correction Codex review F4 named, whose strength rides
+	//: the substep count and whose transfer knows no bound - so a 0.3 "Torsen" centre and a 0.6 Kunos
+	//: pack both behaved as fully locked, and Drive's owner measured three centres identical on the
+	//: pad and in a pirouette. The velocity-equalising amount stays as the NUMERICAL CAP (a pack cannot
+	//: move more than would equalise the axles this substep), and the pack's own bound is put over it:
+	//:
+	//:     capacity = preload + lock_ratio x |input torque|
+	//:
+	//: scaled uniformly across the axles so their biases still sum to zero. A Torsen with a 4:1 bias
+	//: ratio is lock 0.30 and no preload: the gripping axle takes up to 80 % of the drive and no more.
+	float RawBiasMax = 0.f;
+	{
+		const bool bIsDrivePass = (DriveTorque * TargetLockedAngVel) >= 0.f;
+		const float PassLockRatio = bIsDrivePass ? Config.DriveLockRatio : Config.CoastLockRatio;
+		for (UVehicleAxleAssemblyComponent* Axle : InAxles)
+		{
+			if (Axle == nullptr || !(Axle->GetAxleConfig().TorqueWeight > SMALL_NUMBER)) continue;
+			const float Raw = UVehicleUtilities::SafeDivide((TargetLockedAngVel - Axle->GetAngularVelocity()) * Axle->GetTotalAxleInertia() * PassLockRatio, InSubstepDeltaTime);
+			RawBiasMax = FMath::Max(RawBiasMax, FMath::Abs(Raw));
+		}
+	}
+	const float PackCapacity = FMath::Max(Config.PreloadTorque, 0.f) + FMath::Clamp(Config.DriveLockRatio, 0.f, 1.f) * FMath::Abs(DriveTorque);
+	const float PackCapacityCoast = FMath::Max(Config.PreloadTorque, 0.f) + FMath::Clamp(Config.CoastLockRatio, 0.f, 1.f) * FMath::Abs(DriveTorque);
 	
 	float SumAngVel = 0.f;
 	float SumDriveAxleInertia = 0.f;
@@ -127,10 +175,31 @@ int32 UVehicleDifferentialComponent::SubstepTransferCase(
 
 			// The calculated TorqueBias is now guaranteed to sum to exactly 0 across all axles
 			float TorqueBias = UVehicleUtilities::SafeDivide(AngVelDifference * Axle->GetTotalAxleInertia() * CurrentLockRatio, InSubstepDeltaTime);
+			//: the pack's bound (Drive 2026-09-12): the same scale on every axle keeps the sum at zero
+			{
+				const float Capacity = bIsDrive ? PackCapacity : PackCapacityCoast;
+				if (RawBiasMax > Capacity && RawBiasMax > SMALL_NUMBER)
+				{
+					TorqueBias *= Capacity / RawBiasMax;
+				}
+			}
 			float NormTorqueWeight = UVehicleUtilities::SafeDivide(Axle->GetAxleConfig().TorqueWeight, SumTorqueWeight);
 
 			// Combine mechanical static split + LSD clutch pack transfer
 			float AxleDriveTorque = DriveTorque * NormTorqueWeight + TorqueBias;
+			if (CVarDiffTrace.GetValueOnAnyThread()  /* the physics thread asks */ != 0)
+			{
+				TraceAccumulator += InSubstepDeltaTime;
+				if (TraceAccumulator >= 0.05f)
+				{
+					TraceAccumulator = 0.f;
+					UE_LOG(LogTemp, Log, TEXT("KF.Centre '%s': in %.0f N.m -> axle '%s' %.0f N.m (%.0f %% of the input; static share %.0f %%, pack bias %+.0f of capacity %.0f), axle %.1f rad/s vs locked %.1f, lock %.2f/%.2f preload %.0f"),
+					       *GetName(), DriveTorque, *Axle->GetName(), AxleDriveTorque,
+					       FMath::Abs(DriveTorque) > 1.f ? 100.f * AxleDriveTorque / DriveTorque : 0.f, 100.f * NormTorqueWeight, TorqueBias,
+					       bIsDrive ? PackCapacity : PackCapacityCoast, Axle->GetAngularVelocity(), TargetLockedAngVel,
+					       Config.DriveLockRatio, Config.CoastLockRatio, Config.PreloadTorque);
+				}
+			}
 
 			// burnout assist
 			bool IsMainDriveAxle = NormTorqueWeight > 0.5f;
