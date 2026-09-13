@@ -2008,6 +2008,18 @@ void FVehicleSuspensionSolver::ComputeAntiPitchRollGeometry(
 
 	float GeomPitchSlope = 0.f;
 	float GeomRollSlope = 0.f;
+	//: 2026-09-13 (Previs, the E90's rear rising under power): THE SIDE-VIEW FORCE POINT DEPENDS ON WHAT
+	//: REACTS THE TORQUE. Braking with outboard brakes, the wheel is locked to the upright and the brake
+	//: force acts at the CONTACT PATCH - the anti-dive/anti-lift line runs from the contact to the
+	//: side-view instant centre. Driving an independent axle whose differential sits on the chassis, the
+	//: drive torque reacts through the chassis and the wishbones only see the hub's thrust - the
+	//: anti-squat line runs from the WHEEL CENTRE (Milliken & Milliken, RCVD section 17.4). This construction
+	//: used the contact patch for both, which on the E90's Chrono rear (IC 0.56 m ahead, 4 cm below the
+	//: hub) reads +129 % anti-squat where the hub-based line gives about -20 %: the links pushed the body
+	//: UP under throttle. Every independent driven axle in the fleet carried the same overstatement.
+	const bool bDriving = TireForceChassis.X > 0.f;
+	const FVector3f HubChassis = Ctx.LowerBallJointChassisLocation + Ctx.HubOffsetFromLowerJointChassis;
+	const FVector3f PitchForcePoint = bDriving ? HubChassis : ImpactPointChassis;
 	if (!bOnlyFromLUTs)
 	{
 		switch (SuspensionType)
@@ -2021,7 +2033,7 @@ void FVehicleSuspensionSolver::ComputeAntiPitchRollGeometry(
 				Ctx.LowerPivotChassisLocation,
 				Ctx.LowerBallJointChassisLocation,
 				Ctx.LowerWishboneChassisAxis,
-				ImpactPointChassis
+				PitchForcePoint
 			);
 			GeomRollSlope = CalculateMacPhersonRollSlope(
 				Ctx.TopMountChassisLocation,
@@ -2040,7 +2052,7 @@ void FVehicleSuspensionSolver::ComputeAntiPitchRollGeometry(
 				Ctx.LowerPivotChassisLocation,
 				Ctx.LowerBallJointChassisLocation,
 				Ctx.LowerWishboneChassisAxis,
-				ImpactPointChassis
+				PitchForcePoint
 			);
 			GeomRollSlope = CalculateDoubleWishboneRollSlope(
 				Ctx.UpperPivotChassisLocation,
