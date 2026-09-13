@@ -343,6 +343,12 @@ void UVehicleAxleAssemblyComponent::PreStepAxle(
 		UpdateSteeringAssist(InMacroDeltaTime, InSteeringInput);
 		UpdateSteering(State.RealSteeringValue, WheelL, WheelR);
 	}
+	else
+	{
+		// Previs, 2026-09-13 (the articulated bus): an unsteered axle takes the angle the harness wrote
+		// (the kinematic articulation's trailer angle on the bus's third axle); 0 for every other car.
+		State.LeftWheelSteeringAngle = State.RightWheelSteeringAngle = ExternalSteeringAngleDeg;
+	}
 
 	if (State.NumOfWheels == 2)
 	{

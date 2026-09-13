@@ -125,6 +125,9 @@ protected:
 	UPROPERTY()
 	TWeakObjectPtr<UVehicleDifferentialComponent> Differential;
 
+	// Previs, 2026-09-13: see SetExternalSteeringAngleDeg. 0 = the axle points straight, as before.
+	float ExternalSteeringAngleDeg = 0.f;
+
 	void UpdateSteering(
 		float InSteeringInput,
 		UVehicleWheelComponent* WheelL,
@@ -167,6 +170,13 @@ public:
 		float InMacroDeltaTime,
 		float InSteeringInput
 	);
+
+	// Previs, 2026-09-13 (the articulated bus, owner: "import the MAN_Lions_City_18E"): an axle steered by
+	// something other than the driver - the trailer angle of a kinematic articulation, written each tick
+	// by the harness. Applied in PreStepAxle ONLY when the axle is not affected by steering; degrees, the
+	// same sign as UpdateSteering's inside-wheel angle (steering input x MaxSteeringAngle).
+	void SetExternalSteeringAngleDeg(float InDegrees) { ExternalSteeringAngleDeg = InDegrees; }
+	float GetExternalSteeringAngleDeg() const { return ExternalSteeringAngleDeg; }
 	void SubstepAxle(
 		float InSubstepDeltaTime,
 		float InDriveTorque,
