@@ -56,6 +56,16 @@ struct KINETIFORGE_API FVehicleTireConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0", DisplayName = "Global Friction Scale"))
 	float FrictionMultiplier = 1.5;
 
+	/**
+	* Previs, 2026-09-13 (owner: "yes add speed sensitivity"): Assetto Corsa's SPEED_SENSITIVITY, the
+	* tyre's grip peak falling with the speed the contact patch travels at: peak x (1 - k v), v in m/s,
+	* both envelopes, clamped so it never falls below 0.3 of the peak. 0 (the default) is a tyre whose
+	* grip does not answer to speed - every car until this existed. Kunos' street tyres state 0.0034-0.0046
+	* (-5 % at 50 km/h, -11 % at 108 km/h); the value is the source's, per car.
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0", DisplayName = "Speed Sensitivity (per m/s)"))
+	float SpeedSensitivity = 0.f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	ETireFrictionCombineMode TireFrictionCombineMode = ETireFrictionCombineMode::Average;
 

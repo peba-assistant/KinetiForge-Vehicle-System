@@ -107,8 +107,15 @@ void FVehicleWheelSolver::PreStep(
         FMath::Min(FMath::Abs(LocalState.RawCamberRad),float(PI/2))/float(PI/2)).Value/G0);
     const float GyLong=CamberMode>=2?Gy:1.f;
     const float GyLat=CamberMode>=1?Gy:1.f;
-    Context.AvailableGrip=Grip(LocalState.DynFrictionMultiplier,TireConfig.LoadForceRatioAtDoubleLoadLong,LocalState.WheelLoad)*Context.Response.grip_x*GyLong;
-    Context.AvailableGripLat=Grip(LocalState.DynFrictionMultiplier,TireConfig.LoadForceRatioAtDoubleLoadLat,LocalState.WheelLoad)*Context.Response.grip_y*GyLat;
+    //: SPEED SENSITIVITY (Previs, 2026-09-13, owner: "yes add speed sensitivity"): Assetto's tyre peak
+    //: falls with the speed of the contact patch, peak x (1 - SPEED_SENSITIVITY x v), v in m/s, on both
+    //: envelopes (Kunos applies it to D, which feeds DX and DY alike). The mapping carried every other
+    //: knob of the tyre section and not this one, so every Assetto car cornered at 100 km/h with the grip
+    //: it has at walking pace: about 5 % over at 50 km/h, 11 % at 108 on a 0.0036 tyre. Clamped at 0.3
+    //: so a stated coefficient can never zero a tyre at speed.
+    const float Sv=FMath::Clamp(1.f-TireConfig.SpeedSensitivity*LocalState.LocalLinearVelocity.Size(),0.3f,1.f);
+    Context.AvailableGrip=Grip(LocalState.DynFrictionMultiplier,TireConfig.LoadForceRatioAtDoubleLoadLong,LocalState.WheelLoad)*Context.Response.grip_x*GyLong*Sv;
+    Context.AvailableGripLat=Grip(LocalState.DynFrictionMultiplier,TireConfig.LoadForceRatioAtDoubleLoadLat,LocalState.WheelLoad)*Context.Response.grip_y*GyLat*Sv;
     Context.PeakForce=FVector2f(Context.AvailableGrip*TireConfig.MaxFx*CachedLUTs.Fx.PeakFriction,
         Context.AvailableGripLat*TireConfig.MaxFy*CachedLUTs.Fy.PeakFriction);
     // Fit peak coefficient independently of source initial slope. No duplicate vehicle
