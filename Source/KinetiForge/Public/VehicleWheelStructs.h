@@ -250,7 +250,26 @@ public:
 			}
 		}
 
-		OriginSlope = FMath::Max(0.f, (this->Samples[1]-this->Samples[0])*(NumSamples-1));
+		//: THE ORIGIN SLOPE IS THE FIRST RISING INTERVAL, NOT THE FIRST TWO SAMPLES (Fable review
+		//: #486 M2, 2026-09-15). A curve whose first key is not at zero slip is held constant before
+		//: it (RCCE_Constant), so Samples[1]-Samples[0] is 0 and the tyre made NO force in that
+		//: direction. The slope of the first interval that rises is the stiffness the curve states
+		//: nearest the origin; for every curve in the corpus (864 of 864 start at the origin) it is
+		//: the same number as before.
+		OriginSlope = 0.f;
+		for (int32 i = 0; i + 1 < NumSamples; ++i)
+		{
+			const float Rise = this->Samples[i + 1] - this->Samples[i];
+			if (Rise > SMALL_NUMBER)
+			{
+				//: after a flat run the first rising step straddles the curve's first key and rises for
+				//: only part of the step; the NEXT full step is the slope the curve states there. A curve
+				//: from the origin (i == 0) keeps its first step, the number it always had.
+				const float Next = (i > 0 && i + 2 < NumSamples) ? this->Samples[i + 2] - this->Samples[i + 1] : 0.f;
+				OriginSlope = (Next > SMALL_NUMBER ? Next : Rise) * (NumSamples - 1);
+				break;
+			}
+		}
         OptimalSlipIndex=0;
         for(int32 i=1;i<NumSamples;++i)
             if(this->Samples[i]>this->Samples[OptimalSlipIndex]) OptimalSlipIndex=i;
