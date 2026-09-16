@@ -1245,6 +1245,11 @@ float FVehicleSuspensionSolver::SuspensionLineTrace(
 	FVector WheelRightVector = Ctx.ChassisWorldTransform.TransformRotation(
 		FQuat(Ctx.HubChassisTransform.GetRotation())).GetRightVector();
 	FVector WheelOuterSideToCenter = HalfWheelWidth * Ctx.WheelSideSign * WheelRightVector;
+	// Previs (2026-09-16): the outer-side start must not move ALONG the ray. With camber the wheel's right vector
+	// has a component along the trace, so the start rose or sank by half the width times sin(camber) and the hub
+	// was placed that much off its radius over the contact (a GT3 front: 8 mm into the road at every state).
+	// Keep only the part of the offset perpendicular to the ray.
+	WheelOuterSideToCenter -= Ctx.RayCastDirectionWorld * FVector::DotProduct(WheelOuterSideToCenter, Ctx.RayCastDirectionWorld);
 	FVector Start = Ctx.RayCastStartWorldLocation + WheelOuterSideToCenter;
 	FVector End = Ctx.RayCastEndWorldLocation + WheelOuterSideToCenter;
 	FVector LineTraceEnd = End - Ctx.RayCastDirectionWorld * WheelRadius;
