@@ -137,19 +137,29 @@ int32 UVehicleDifferentialComponent::SubstepTransferCase(
 	//:
 	//: scaled uniformly across the axles so their biases still sum to zero. A Torsen with a 4:1 bias
 	//: ratio is lock 0.30 and no preload: the gripping axle takes up to 80 % of the drive and no more.
+	//: THE VISCOUS COUPLING (Drive 2026-09-24): c x |speed difference across the coupling| joins the
+	//: capacity. Two drive axles' speed difference is the sum of their distances to the locked speed
+	//: (they sit on opposite sides of it); more axles sum the same way. A coupling with no plates has
+	//: lock 0, whose raw here would be zero, so a stated coefficient makes the raw the EQUALISING
+	//: torque - the axle law's - and the capacity bounds it. No coefficient: this block as it was.
+	const bool bViscous = Config.ViscousCoefficient > 0.f;
 	float RawBiasMax = 0.f;
+	float SpeedSpread = 0.f;
 	{
 		const bool bIsDrivePass = (DriveTorque * TargetLockedAngVel) >= 0.f;
-		const float PassLockRatio = bIsDrivePass ? Config.DriveLockRatio : Config.CoastLockRatio;
+		const float PassLockRatio = bViscous ? 1.f : (bIsDrivePass ? Config.DriveLockRatio : Config.CoastLockRatio);
 		for (UVehicleAxleAssemblyComponent* Axle : InAxles)
 		{
 			if (Axle == nullptr || !(Axle->GetAxleConfig().TorqueWeight > SMALL_NUMBER)) continue;
-			const float Raw = UVehicleUtilities::SafeDivide((TargetLockedAngVel - Axle->GetAngularVelocity()) * Axle->GetTotalAxleInertia() * PassLockRatio, InSubstepDeltaTime);
+			const float Difference = TargetLockedAngVel - Axle->GetAngularVelocity();
+			SpeedSpread += FMath::Abs(Difference);
+			const float Raw = UVehicleUtilities::SafeDivide(Difference * Axle->GetTotalAxleInertia() * PassLockRatio, InSubstepDeltaTime);
 			RawBiasMax = FMath::Max(RawBiasMax, FMath::Abs(Raw));
 		}
 	}
-	const float PackCapacity = FMath::Max(Config.PreloadTorque, 0.f) + FMath::Clamp(Config.DriveLockRatio, 0.f, 1.f) * FMath::Abs(DriveTorque);
-	const float PackCapacityCoast = FMath::Max(Config.PreloadTorque, 0.f) + FMath::Clamp(Config.CoastLockRatio, 0.f, 1.f) * FMath::Abs(DriveTorque);
+	const float ViscousCapacity = bViscous ? Config.ViscousCoefficient * SpeedSpread : 0.f;
+	const float PackCapacity = FMath::Max(Config.PreloadTorque, 0.f) + FMath::Clamp(Config.DriveLockRatio, 0.f, 1.f) * FMath::Abs(DriveTorque) + ViscousCapacity;
+	const float PackCapacityCoast = FMath::Max(Config.PreloadTorque, 0.f) + FMath::Clamp(Config.CoastLockRatio, 0.f, 1.f) * FMath::Abs(DriveTorque) + ViscousCapacity;
 	
 	float SumAngVel = 0.f;
 	float SumDriveAxleInertia = 0.f;
@@ -171,7 +181,7 @@ int32 UVehicleDifferentialComponent::SubstepTransferCase(
 			float AngVelDifference = TargetLockedAngVel - Axle->GetAngularVelocity();
 
 			bool bIsDrive = (DriveTorque * TargetLockedAngVel) >= 0.f;
-			float CurrentLockRatio = bIsDrive ? Config.DriveLockRatio : Config.CoastLockRatio;
+			float CurrentLockRatio = bViscous ? 1.f : (bIsDrive ? Config.DriveLockRatio : Config.CoastLockRatio);
 
 			// The calculated TorqueBias is now guaranteed to sum to exactly 0 across all axles
 			float TorqueBias = UVehicleUtilities::SafeDivide(AngVelDifference * Axle->GetTotalAxleInertia() * CurrentLockRatio, InSubstepDeltaTime);
@@ -193,11 +203,11 @@ int32 UVehicleDifferentialComponent::SubstepTransferCase(
 				if (TraceAccumulator >= 0.05f)
 				{
 					TraceAccumulator = 0.f;
-					UE_LOG(LogTemp, Log, TEXT("KF.Centre '%s': in %.0f N.m -> axle '%s' %.0f N.m (%.0f %% of the input; static share %.0f %%, pack bias %+.0f of capacity %.0f), axle %.1f rad/s vs locked %.1f, lock %.2f/%.2f preload %.0f"),
+					UE_LOG(LogTemp, Log, TEXT("KF.Centre '%s': in %.0f N.m -> axle '%s' %.0f N.m (%.0f %% of the input; static share %.0f %%, pack bias %+.0f of capacity %.0f), axle %.1f rad/s vs locked %.1f, lock %.2f/%.2f preload %.0f viscous %.1f"),
 					       *GetName(), DriveTorque, *Axle->GetName(), AxleDriveTorque,
 					       FMath::Abs(DriveTorque) > 1.f ? 100.f * AxleDriveTorque / DriveTorque : 0.f, 100.f * NormTorqueWeight, TorqueBias,
 					       bIsDrive ? PackCapacity : PackCapacityCoast, Axle->GetAngularVelocity(), TargetLockedAngVel,
-					       Config.DriveLockRatio, Config.CoastLockRatio, Config.PreloadTorque);
+					       Config.DriveLockRatio, Config.CoastLockRatio, Config.PreloadTorque, Config.ViscousCoefficient);
 				}
 			}
 
@@ -369,8 +379,13 @@ void UVehicleDifferentialComponent::GetOutputTorque(
 	//
 	// The old expression survives as a NUMERICAL CAP and nothing more: a pack cannot transfer more
 	// than would equalise the two shafts within this step, or it overshoots and rings.
+	//
+	// A VISCOUS COUPLING (Drive 2026-09-24) adds c x |speed difference| to the same capacity: a
+	// coupling with no plates states a coefficient alone and transfers exactly that (the equalising
+	// cap is far larger at any realistic c); a plate-and-viscous unit states both and gets the sum.
 	const float Capacity = FMath::Max(Config.PreloadTorque, 0.f)
-		+ FMath::Clamp(CurrentLockRatio, 0.f, 1.f) * FMath::Abs(Config.GearRatio * InTorque);
+		+ FMath::Clamp(CurrentLockRatio, 0.f, 1.f) * FMath::Abs(Config.GearRatio * InTorque)
+		+ FMath::Max(Config.ViscousCoefficient, 0.f) * FMath::Abs(OmegaDiff);
 	const float NoOvershoot = FMath::Abs(
 		UVehicleUtilities::SafeDivide(ReducedInertia * OmegaDiff, InDeltaTime));
 	const float TransferTorque = FMath::Sign(OmegaDiff) * FMath::Min(Capacity, NoOvershoot);

@@ -437,4 +437,21 @@ struct FVehicleLimitedSlipDifferentialConfig
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Setup", meta = (ClampMin = "0.0"))
 	float PreloadTorque = 0.f;	//N*m
+
+	/**
+	* VISCOUS COUPLING coefficient, N*m*s/rad (Drive 2026-09-24, the Audi V8 quattro DTM's centre and
+	* any car whose research states one). A viscous coupling transfers a torque proportional to the
+	* speed difference across it - c x |omega difference| - with no torque-sensitive part and no
+	* preload. It joins the pack's capacity:
+	*
+	*     capacity = preload + lock_ratio x |input torque| + c x |omega difference|
+	*
+	* so a pure coupling states a coefficient with zero lock and zero preload, and a plate-and-viscous
+	* unit states both. A differential stating a coefficient uses the equalising torque as its raw
+	* (the axle law's; the centre law's raw was lock x that, which is zero for a coupling with no
+	* plates) and the capacity bounds it. Zero, the default, changes nothing for every car that
+	* states none.
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Setup", meta = (ClampMin = "0.0"))
+	float ViscousCoefficient = 0.f;	//N*m*s/rad
 };
