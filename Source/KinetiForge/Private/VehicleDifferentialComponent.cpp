@@ -64,10 +64,10 @@ void UVehicleDifferentialComponent::UpdateOutputShaft(float InDriveTorque, float
 		{
 			TraceAccumulator = 0.f;
 			const float Total = FMath::Abs(OutLeftTorque) + FMath::Abs(OutRightTorque);
-			UE_LOG(LogTemp, Log, TEXT("KF.Diff '%s': in %.0f N.m x %.2f -> left %.0f / right %.0f N.m (%.0f %% / %.0f %%), speeds %.1f / %.1f rad/s, lock %.2f/%.2f preload %.0f"),
+			UE_LOG(LogTemp, Log, TEXT("KF.Diff '%s': in %.0f N.m x %.2f -> left %.0f / right %.0f N.m (%.0f %% / %.0f %%), speeds %.1f / %.1f rad/s, lock %.2f/%.2f preload %.0f viscous %.1f"),
 			       *GetName(), InDriveTorque, Config.GearRatio, OutLeftTorque, OutRightTorque,
 			       Total > 1.f ? 100.f * FMath::Abs(OutLeftTorque) / Total : 50.f, Total > 1.f ? 100.f * FMath::Abs(OutRightTorque) / Total : 50.f,
-			       InLeftAngularVelocity, InRightAngularVelocity, Config.DriveLockRatio, Config.CoastLockRatio, Config.PreloadTorque);
+			       InLeftAngularVelocity, InRightAngularVelocity, Config.DriveLockRatio, Config.CoastLockRatio, Config.PreloadTorque, Config.ViscousCoefficient);
 		}
 	}
 	
