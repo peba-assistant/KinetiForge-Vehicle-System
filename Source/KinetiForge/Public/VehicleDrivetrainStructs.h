@@ -318,6 +318,9 @@ struct KINETIFORGE_API FVehicleClutchSimState
 	/** Previs, 2026-09-25: the facing is slipping (kinetic capacity) rather than stuck (static). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Movement")
 	bool bSlipping = false;
+	/** Previs, 2026-09-25: the sign of the facings' slip when they broke away; they stick again where it changes. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Movement")
+	float SlipSign = 0.f;
 };
 
 /*******************************GEARBOX********************************/

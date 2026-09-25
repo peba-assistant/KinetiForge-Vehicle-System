@@ -27,10 +27,10 @@ void UVehicleClutchComponent::BeginPlay()
 }
 
 
-// Previs, 2026-09-25: static vs kinetic friction. A stuck facing holds up to the static capacity and
-// breaks away past it; a slipping facing carries the kinetic capacity (KineticRatio x static) until
-// the torque that would close the slip fits inside it, and then sticks. KineticRatio 1 reproduces
-// the old single clamp exactly: the same bound both ways, whatever the state flag says.
+// Previs, 2026-09-25: static vs kinetic friction for the ConstraintLock path. A stuck facing holds up
+// to the static capacity and breaks away past it; a slipping facing carries the kinetic capacity
+// (KineticRatio x static) until the torque that closes the slip within this step fits inside it -
+// the slip crosses zero inside the step - and then sticks. KineticRatio 1 is the old single clamp.
 static float ClampByFacing(FVehicleClutchSimState& State, const float KineticRatio, const float Demand)
 {
 	const float StaticCapacity = State.MaxClutchTorque * State.ClutchLock;
@@ -80,13 +80,35 @@ float UVehicleClutchComponent::GetTorqueSpringModel(
 
 	float SpringModelTorque = TorqueNumerator / TorqueDenominator;
 
-	const float Demanded = SpringModelTorque;
-	SpringModelTorque = ClampByFacing(State, Config.KineticRatio, Demanded);
-
-	if (SpringModelTorque == Demanded)
+	// Previs, 2026-09-25 (AWAITING FABLE REVIEW; the Opus cross-review's LOW on 0ef3e70): here the slip is
+	// engine minus gearbox speed and includes the spring's own wind-up rate, so "the demand fits" is not
+	// "the facings stopped slipping": the old clamp and 0ef3e70 both re-stuck the facings at 7-9 rad/s
+	// of slip, the spring then wound past the static capacity within a step and broke away again at
+	// the static peak (a chatter). Coulomb's rule instead: slipping facings carry the kinetic capacity
+	// in the direction of their slip and stick again only where that slip crosses zero; while they
+	// slip the spring holds the wind-up that carries the friction torque, so the torque is continuous
+	// when they stick. A stuck clutch breaks away past its static capacity, as before.
+	const float StaticCapacity = State.MaxClutchTorque * State.ClutchLock;
+	const float KineticCapacity = StaticCapacity * FMath::Clamp(Config.KineticRatio, 0.f, 1.f);
+	if (State.bSlipping && (ClutchSlip == 0.f || FMath::Sign(ClutchSlip) != State.SlipSign))
 	{
-		State.AngleDiff += ClutchSlipScaled * DeltaTime;
+		State.bSlipping = false;
 	}
+	if (!State.bSlipping && FMath::Abs(SpringModelTorque) > StaticCapacity)
+	{
+		State.bSlipping = true;
+		State.SlipSign = ClutchSlip != 0.f ? FMath::Sign(ClutchSlip) : FMath::Sign(SpringModelTorque);
+		SpringModelTorque = FMath::Sign(SpringModelTorque) * StaticCapacity;  // the breakaway step carries the static peak
+		State.AngleDiff = UVehicleUtilities::SafeDivide(SpringModelTorque * TorqueDenominator, K_Series);
+		return State.ClutchTorque = SpringModelTorque;
+	}
+	if (State.bSlipping)
+	{
+		SpringModelTorque = State.SlipSign * KineticCapacity;
+		State.AngleDiff = UVehicleUtilities::SafeDivide(SpringModelTorque * TorqueDenominator, K_Series);
+		return State.ClutchTorque = SpringModelTorque;
+	}
+	State.AngleDiff += ClutchSlipScaled * DeltaTime;
 
 	State.AngleDiff *= State.ClutchLock;
 
