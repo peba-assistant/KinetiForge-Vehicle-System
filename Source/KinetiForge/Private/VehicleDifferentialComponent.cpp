@@ -125,6 +125,47 @@ int32 UVehicleDifferentialComponent::SubstepTransferCase(
 	// update axles
 	float DriveTorque = Config.GearRatio * InGearboxOutputTorque;
 
+	//: THE ON-DEMAND COUPLING (Drive 2026-09-25; the config's note): the drive goes to the primary axles,
+	//: each secondary axle (TorqueWeight 0) takes the clutch's torque alone, the reaction off the primaries.
+	//: T = clamp(ramp x (w_primary - w_secondary), +-max) as Assetto Corsa's [AWD2] computes it; the
+	//: velocity-equalising amount stays the numerical cap, as for the pack below (a clutch cannot move
+	//: more than would equalise the two sides this substep).
+	float CouplingTorque = 0.f;
+	int32 NumOfSecondaryAxles = 0;
+	if (Config.bOnDemandCoupling)
+	{
+		float PrimaryMomentum = 0.f, PrimaryInertia = 0.f, SecondaryMomentum = 0.f, SecondaryInertia = 0.f;
+		for (UVehicleAxleAssemblyComponent* Axle : InAxles)
+		{
+			if (Axle == nullptr) continue;
+			const float AxleInertia = Axle->GetTotalAxleInertia();
+			if (Axle->GetAxleConfig().TorqueWeight > SMALL_NUMBER)
+			{
+				PrimaryMomentum += AxleInertia * Axle->GetAngularVelocity();
+				PrimaryInertia += AxleInertia;
+			}
+			else
+			{
+				SecondaryMomentum += AxleInertia * Axle->GetAngularVelocity();
+				SecondaryInertia += AxleInertia;
+				++NumOfSecondaryAxles;
+			}
+		}
+		if (NumOfSecondaryAxles > 0 && PrimaryInertia > SMALL_NUMBER && SecondaryInertia > SMALL_NUMBER)
+		{
+			const float SpeedDifference = UVehicleUtilities::SafeDivide(PrimaryMomentum, PrimaryInertia)
+				- UVehicleUtilities::SafeDivide(SecondaryMomentum, SecondaryInertia);
+			const float MaxTorque = FMath::Max(Config.CouplingMaxTorque, 0.f);
+			CouplingTorque = FMath::Clamp(FMath::Max(Config.CouplingRampTorque, 0.f) * SpeedDifference, -MaxTorque, MaxTorque);
+			const float EqualisingTorque = UVehicleUtilities::SafeDivide(
+				SpeedDifference * PrimaryInertia * SecondaryInertia / (PrimaryInertia + SecondaryInertia), InSubstepDeltaTime);
+			if (FMath::Abs(CouplingTorque) > FMath::Abs(EqualisingTorque))
+			{
+				CouplingTorque = EqualisingTorque;
+			}
+		}
+	}
+
 	//: THE CENTRE IS A CLUTCH PACK TOO (Drive, 2026-09-12; ADR-041 reached the axle differentials on
 	//: 2026-09-10 and never this path). What stood here moved `lock x inertia x speed difference / dt`
 	//: EVERY substep - the per-substep velocity correction Codex review F4 named, whose strength rides
@@ -195,8 +236,8 @@ int32 UVehicleDifferentialComponent::SubstepTransferCase(
 			}
 			float NormTorqueWeight = UVehicleUtilities::SafeDivide(Axle->GetAxleConfig().TorqueWeight, SumTorqueWeight);
 
-			// Combine mechanical static split + LSD clutch pack transfer
-			float AxleDriveTorque = DriveTorque * NormTorqueWeight + TorqueBias;
+			// Combine mechanical static split + LSD clutch pack transfer (- the on-demand coupling's reaction)
+			float AxleDriveTorque = DriveTorque * NormTorqueWeight + TorqueBias - CouplingTorque * NormTorqueWeight;
 			if (CVarDiffTrace.GetValueOnAnyThread()  /* the physics thread asks */ != 0)
 			{
 				TraceAccumulator += InSubstepDeltaTime;
@@ -229,9 +270,10 @@ int32 UVehicleDifferentialComponent::SubstepTransferCase(
 		}
 		else
 		{
+			//: a secondary axle of the on-demand coupling takes the clutch's torque (zero otherwise)
 			Axle->SubstepAxle(
 				InSubstepDeltaTime,
-				0.f,
+				NumOfSecondaryAxles > 0 ? CouplingTorque / NumOfSecondaryAxles : 0.f,
 				InBrakeValue,
 				InHandbrakeValue,
 				AxleInertia, AxleAngVel, AxleStiffness

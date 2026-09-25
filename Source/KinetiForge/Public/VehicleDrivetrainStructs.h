@@ -470,4 +470,21 @@ struct FVehicleLimitedSlipDifferentialConfig
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Setup", meta = (ClampMin = "0.0"))
 	float ViscousCoefficient = 0.f;	//N*m*s/rad
+
+	/**
+	* THE ON-DEMAND COUPLING (Drive 2026-09-25, the owner: "simulate it and create a new component if
+	* needed"): a transfer case that is NOT a differential but a controlled clutch - Audi's R8, Lamborghini's
+	* Haldex, Porsche's PTM, Nissan's ATTESA - as Assetto Corsa's [AWD2] computes it (acs.exe
+	* Drivetrain::step4WD_new, docs/code reference/physics/ac-awd2-clutch-law-2026-09-25.md): the drive goes
+	* to the PRIMARY axle(s) (TorqueWeight > 0) only; each SECONDARY axle (TorqueWeight 0) is fed by the
+	* clutch alone, T = clamp(CouplingRampTorque x (w_primary - w_secondary), +-CouplingMaxTorque), the
+	* reaction taken off the primary. Both values are at this node (the propshaft): the harness converts
+	* the wheel-level law. CouplingMaxTorque is set each frame by a controller (the clutch's command).
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Setup")
+	bool bOnDemandCoupling = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Setup", meta = (ClampMin = "0.0"))
+	float CouplingRampTorque = 0.f;	//N*m per rad/s of speed difference, at this node
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Setup", meta = (ClampMin = "0.0"))
+	float CouplingMaxTorque = 0.f;	//N*m, at this node
 };
