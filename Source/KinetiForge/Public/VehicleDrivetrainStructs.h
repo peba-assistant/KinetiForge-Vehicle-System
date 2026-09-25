@@ -290,6 +290,16 @@ struct KINETIFORGE_API FVehicleClutchConfig
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClutchSetup", meta = (ClampMin = "0.0"))
 	float Capacity = 1.5f;
+
+	/**
+	 * Previs, 2026-09-25 (the owner: "make sure clutch has realistic slip grip"): kinetic over static
+	 * friction of the facing. A SLIPPING clutch carries Capacity x KineticRatio; it breaks away when
+	 * the torque asked of it passes the static capacity and re-locks when the kinetic capacity can
+	 * close the slip. 1.0 = one Coulomb capacity both ways, the behaviour before this field.
+	 * Used by FrictionClutch and ConstraintLock (a fluid coupling has no static friction).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ClutchSetup", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float KineticRatio = 1.f;
 };
 
 USTRUCT(BlueprintType)
@@ -305,6 +315,9 @@ struct KINETIFORGE_API FVehicleClutchSimState
 	float MaxClutchTorque = 0.f;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Force")
 	float ClutchTorque = 0.f;
+	/** Previs, 2026-09-25: the facing is slipping (kinetic capacity) rather than stuck (static). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Movement")
+	bool bSlipping = false;
 };
 
 /*******************************GEARBOX********************************/

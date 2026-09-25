@@ -27,6 +27,27 @@ void UVehicleClutchComponent::BeginPlay()
 }
 
 
+// Previs, 2026-09-25: static vs kinetic friction. A stuck facing holds up to the static capacity and
+// breaks away past it; a slipping facing carries the kinetic capacity (KineticRatio x static) until
+// the torque that would close the slip fits inside it, and then sticks. KineticRatio 1 reproduces
+// the old single clamp exactly: the same bound both ways, whatever the state flag says.
+static float ClampByFacing(FVehicleClutchSimState& State, const float KineticRatio, const float Demand)
+{
+	const float StaticCapacity = State.MaxClutchTorque * State.ClutchLock;
+	const float KineticCapacity = StaticCapacity * FMath::Clamp(KineticRatio, 0.f, 1.f);
+	if (State.bSlipping)
+	{
+		State.bSlipping = FMath::Abs(Demand) > KineticCapacity;
+		return State.bSlipping ? FMath::Sign(Demand) * KineticCapacity : Demand;
+	}
+	if (FMath::Abs(Demand) > StaticCapacity)
+	{
+		State.bSlipping = true;
+		return FMath::Sign(Demand) * StaticCapacity;  // the breakaway step carries the static peak
+	}
+	return Demand;
+}
+
 float UVehicleClutchComponent::GetTorqueSpringModel(
 	const float DeltaTime,
 	const float ClutchSlip,
@@ -59,13 +80,10 @@ float UVehicleClutchComponent::GetTorqueSpringModel(
 
 	float SpringModelTorque = TorqueNumerator / TorqueDenominator;
 
-	float CurrentCapacity = State.MaxClutchTorque * State.ClutchLock;
+	const float Demanded = SpringModelTorque;
+	SpringModelTorque = ClampByFacing(State, Config.KineticRatio, Demanded);
 
-	if (FMath::Abs(SpringModelTorque) > CurrentCapacity)
-	{
-		SpringModelTorque = FMath::Sign(SpringModelTorque) * CurrentCapacity;
-	}
-	else
+	if (SpringModelTorque == Demanded)
 	{
 		State.AngleDiff += ClutchSlipScaled * DeltaTime;
 	}
@@ -108,8 +126,7 @@ float UVehicleClutchComponent::GetTorqueConstraintModel(
 	float J_Effective = UVehicleUtilities::SafeDivide(J_Gearbox * J_Engine, J_Gearbox + J_Engine);
 
 	float ExactLockTorque = (ClutchSlip * J_Effective) / DeltaTime;
-	float CurrentCapacity = State.MaxClutchTorque * State.ClutchLock;
-	return State.ClutchTorque = FMath::Clamp(ExactLockTorque, -CurrentCapacity, CurrentCapacity);
+	return State.ClutchTorque = ClampByFacing(State, Config.KineticRatio, ExactLockTorque);
 }
 
 // Called every frame
