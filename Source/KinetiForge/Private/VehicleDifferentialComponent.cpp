@@ -157,6 +157,12 @@ int32 UVehicleDifferentialComponent::SubstepTransferCase(
 				- UVehicleUtilities::SafeDivide(SecondaryMomentum, SecondaryInertia);
 			const float MaxTorque = FMath::Max(Config.CouplingMaxTorque, 0.f);
 			CouplingTorque = FMath::Clamp(FMath::Max(Config.CouplingRampTorque, 0.f) * SpeedDifference, -MaxTorque, MaxTorque);
+			//: one-way: only while the primary runs ahead in its own direction of rotation (it drives, never brakes, the secondary)
+			const float PrimarySpeed = UVehicleUtilities::SafeDivide(PrimaryMomentum, PrimaryInertia);
+			if (Config.bOneWayCoupling && CouplingTorque * PrimarySpeed <= 0.f)
+			{
+				CouplingTorque = 0.f;
+			}
 			const float EqualisingTorque = UVehicleUtilities::SafeDivide(
 				SpeedDifference * PrimaryInertia * SecondaryInertia / (PrimaryInertia + SecondaryInertia), InSubstepDeltaTime);
 			if (FMath::Abs(CouplingTorque) > FMath::Abs(EqualisingTorque))
@@ -270,7 +276,8 @@ int32 UVehicleDifferentialComponent::SubstepTransferCase(
 		}
 		else
 		{
-			//: a secondary axle of the on-demand coupling takes the clutch's torque (zero otherwise)
+			//: a secondary axle of the on-demand coupling takes the clutch's torque (zero otherwise) - and is POWERED for it
+			Axle->SetCouplingFed(Config.bOnDemandCoupling);
 			Axle->SubstepAxle(
 				InSubstepDeltaTime,
 				NumOfSecondaryAxles > 0 ? CouplingTorque / NumOfSecondaryAxles : 0.f,

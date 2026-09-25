@@ -439,7 +439,7 @@ void UVehicleAxleAssemblyComponent::SubstepAxle(
 	State.HandbrakeTorque = AxleConfig.bAffectedByHandbrake ?
 		AxleConfig.MaxHandbrakeTorque * FMath::Clamp(InHandbrakeInput, 0.f, 1.f) : 0.f;
 
-	const bool bNotPowerAxle = AxleConfig.TorqueWeight <= SMALL_NUMBER && FMath::IsNearlyZero(State.P3MotorTorque);
+	const bool bNotPowerAxle = AxleConfig.TorqueWeight <= SMALL_NUMBER && !bCouplingFed && FMath::IsNearlyZero(State.P3MotorTorque);
 	const bool bWheelNotDriven = bNotPowerAxle || (Diff == nullptr) || (State.NumOfWheels == 0);
 
 	// 1. data preparation

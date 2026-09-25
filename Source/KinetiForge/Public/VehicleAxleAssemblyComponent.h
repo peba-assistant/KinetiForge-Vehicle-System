@@ -127,6 +127,7 @@ protected:
 
 	// Previs, 2026-09-13: see SetExternalSteeringAngleDeg. 0 = the axle points straight, as before.
 	float ExternalSteeringAngleDeg = 0.f;
+	bool bCouplingFed = false;
 
 	void UpdateSteering(
 		float InSteeringInput,
@@ -177,6 +178,11 @@ public:
 	// same sign as UpdateSteering's inside-wheel angle (steering input x MaxSteeringAngle).
 	void SetExternalSteeringAngleDeg(float InDegrees) { ExternalSteeringAngleDeg = InDegrees; }
 	float GetExternalSteeringAngleDeg() const { return ExternalSteeringAngleDeg; }
+	// Previs, 2026-09-25 (AWAITING FABLE REVIEW): an axle of TorqueWeight 0 fed by the transfer case's on-demand
+	// coupling is POWERED - it takes the clutch's torque and reports its wheels' speed. Without this SubstepAxle
+	// treated it as unpowered: it dropped the torque and reported its loose driveshaft, so the coupling saw a huge
+	// speed difference and moved its whole limit off the primary into nothing (the AWD2 cars' lost ~75 %).
+	void SetCouplingFed(bool bInCouplingFed) { bCouplingFed = bInCouplingFed; }
 	void SubstepAxle(
 		float InSubstepDeltaTime,
 		float InDriveTorque,

@@ -487,4 +487,11 @@ struct FVehicleLimitedSlipDifferentialConfig
 	float CouplingRampTorque = 0.f;	//N*m per rad/s of speed difference, at this node
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Setup", meta = (ClampMin = "0.0"))
 	float CouplingMaxTorque = 0.f;	//N*m, at this node
+	/* ONE-WAY (Previs, 2026-09-25; AWAITING FABLE REVIEW): an overrunning clutch (Polaris' Hilliard front gearcase)
+	* transfers only while the primary side runs ahead of the secondary in the primary's own direction of
+	* rotation, and freewheels otherwise. With a secondary geared shorter than the primary (the MRZR: front 3.82,
+	* rear 3.53) it engages only past the ratio mismatch in rear slip (~8 %), as the real one does.
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Setup")
+	bool bOneWayCoupling = false;
 };
