@@ -32,7 +32,7 @@ void UVehicleAsyncTickComponent::RegisterDriveAssembly(UVehicleDriveAssemblyComp
 
 void UVehicleAsyncTickComponent::UnRegisterDriveAssembly(UVehicleDriveAssemblyComponent* targetDriveAssembly)
 {
-	if (DriveAssemblies.Find(targetDriveAssembly))DriveAssemblies.Remove(targetDriveAssembly);
+	if (DriveAssemblies.Contains(targetDriveAssembly))DriveAssemblies.Remove(targetDriveAssembly);
 }
 
 void UVehicleAsyncTickComponent::RegisterWheelCoordinator(UVehicleWheelCoordinatorComponent* newWheelCoordinator)
@@ -42,7 +42,7 @@ void UVehicleAsyncTickComponent::RegisterWheelCoordinator(UVehicleWheelCoordinat
 
 void UVehicleAsyncTickComponent::UnRegisterWheelCoordinator(UVehicleWheelCoordinatorComponent* targetWheelCoordinator)
 {
-	if (WheelCoordinators.Find(targetWheelCoordinator))WheelCoordinators.Remove(targetWheelCoordinator);
+	if (WheelCoordinators.Contains(targetWheelCoordinator))WheelCoordinators.Remove(targetWheelCoordinator);
 }
 
 void UVehicleAsyncTickComponent::RegisterAsyncSpringArm(UVehicleAsyncSpringArmComponent* newAsyncSpringArm)
@@ -52,7 +52,7 @@ void UVehicleAsyncTickComponent::RegisterAsyncSpringArm(UVehicleAsyncSpringArmCo
 
 void UVehicleAsyncTickComponent::UnRegisterAsyncSpringArm(UVehicleAsyncSpringArmComponent* targetAsyncSpringArm)
 {
-	if (AsyncSpringArms.Find(targetAsyncSpringArm))AsyncSpringArms.Remove(targetAsyncSpringArm);
+	if (AsyncSpringArms.Contains(targetAsyncSpringArm))AsyncSpringArms.Remove(targetAsyncSpringArm);
 }
 
 void UVehicleAsyncTickComponent::BeginPlay()

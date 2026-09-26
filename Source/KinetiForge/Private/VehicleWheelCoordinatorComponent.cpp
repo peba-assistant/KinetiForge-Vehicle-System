@@ -261,7 +261,7 @@ void UVehicleWheelCoordinatorComponent::RegisterAero(UVehicleAeroBaseComponent* 
 
 void UVehicleWheelCoordinatorComponent::UnregisterAero(UVehicleAeroBaseComponent* Aero)
 {
-	if (RegisteredAeros.Find(Aero))
+	if (RegisteredAeros.Contains(Aero))
 	{
 		RegisteredAeros.Remove(Aero);
 	}
