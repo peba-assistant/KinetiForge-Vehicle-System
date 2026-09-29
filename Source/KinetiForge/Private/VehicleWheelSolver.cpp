@@ -113,7 +113,13 @@ void FVehicleWheelSolver::PreStep(
     //: knob of the tyre section and not this one, so every Assetto car cornered at 100 km/h with the grip
     //: it has at walking pace: about 5 % over at 50 km/h, 11 % at 108 on a 0.0036 tyre. Clamped at 0.3
     //: so a stated coefficient can never zero a tyre at speed.
-    const float Sv=FMath::Clamp(1.f-TireConfig.SpeedSensitivity*LocalState.LocalLinearVelocity.Size(),0.3f,1.f);
+    //: (Previs 2026-09-30, AWAITING FABLE REVIEW; Granddaddy Fable's approved design) `previs.tire.slip_speed_decay` 1
+    //: moves the decay onto the SLIP speed (Burckhardt's measured dry law), applied below once the peak slip is known;
+    //: 0 (the default until the E30/F40 skidpad before/after) keeps this travel-speed form exactly.
+    static const auto* const SlipSpeedDecay =
+        IConsoleManager::Get().FindConsoleVariable(TEXT("previs.tire.slip_speed_decay"));
+    const bool bSlipSpeedDecay = SlipSpeedDecay != nullptr && SlipSpeedDecay->GetInt() != 0;
+    const float Sv=bSlipSpeedDecay?1.f:FMath::Clamp(1.f-TireConfig.SpeedSensitivity*LocalState.LocalLinearVelocity.Size(),0.3f,1.f);
     Context.AvailableGrip=Grip(LocalState.DynFrictionMultiplier,TireConfig.LoadForceRatioAtDoubleLoadLong,LocalState.WheelLoad)*Context.Response.grip_x*GyLong*Sv;
     Context.AvailableGripLat=Grip(LocalState.DynFrictionMultiplier,TireConfig.LoadForceRatioAtDoubleLoadLat,LocalState.WheelLoad)*Context.Response.grip_y*GyLat*Sv;
     Context.PeakForce=FVector2f(Context.AvailableGrip*TireConfig.MaxFx*CachedLUTs.Fx.PeakFriction,
@@ -125,6 +131,20 @@ void FVehicleWheelSolver::PreStep(
     Context.ForceStiffness=FVector2f(
         Grip(TireConfig.FrictionMultiplier,TireConfig.LoadForceRatioAtDoubleLoadLong,LocalState.WheelLoad)*TireConfig.MaxFx*CachedLUTs.Fx.OriginSlope*Context.Response.stiffness_x,
         Grip(TireConfig.FrictionMultiplier,TireConfig.LoadForceRatioAtDoubleLoadLat,LocalState.WheelLoad)*TireConfig.MaxFy*CachedLUTs.Fy.OriginSlope/(PI/2)*Context.Response.stiffness_y);
+    //: PEAK SLIP MOVES WITH LOAD (Previs 2026-09-30, AWAITING FABLE REVIEW): the peak force and the stiffness above carry
+    //: the same load factor, so their ratio - the peak slip - never moved with load. The stiffness alone takes
+    //: l^-q (q/2 below the reference load; tire_response.hpp), the peak stays: alpha_pk = alpha_pk0 l^q. q 0 = today.
+    Context.ForceStiffness.X*=float(previs::tire::response::peak_slip_stiffness_scale(P.peak_slip_load_power_x,LocalState.WheelLoad,P.reference_load));
+    Context.ForceStiffness.Y*=float(previs::tire::response::peak_slip_stiffness_scale(P.peak_slip_load_power_y,LocalState.WheelLoad,P.reference_load));
+    if(bSlipSpeedDecay && TireConfig.SpeedSensitivity>0 && Context.ForceStiffness.Y>0) {
+        //: the decay on the slip speed: c = k / sin(alpha_pk) keeps the source's loss AT THE LIMIT and takes nothing in
+        //: the linear range; the slip speed is the previous substep's patch slip (no implicit loop).
+        const double AlphaPk=(CachedLUTs.Fy.OptimalSlipIndex/1023.)*CachedLUTs.Fy.OriginSlope/FMath::Max(CachedLUTs.Fy.PeakFriction,SMALL_NUMBER)
+            *Context.PeakForce.Y/Context.ForceStiffness.Y;
+        const float Ss=float(previs::tire::response::slip_speed_decay(TireConfig.SpeedSensitivity,
+            FMath::Sqrt(FMath::Square(LocalState.LongSlipVelocity)+FMath::Square(LocalState.LatSlipVelocity)),AlphaPk));
+        Context.AvailableGrip*=Ss; Context.AvailableGripLat*=Ss; Context.PeakForce*=Ss;
+    }
     const double Cgamma0=Grip(TireConfig.FrictionMultiplier,TireConfig.LoadForceRatioAtDoubleLoadLat,P.reference_load)*TireConfig.MaxFy*CachedLUTs.Fy.OriginSlope/(PI/2)*P.camber_stiffness_ratio;
     LocalState.CamberStiffness=Cgamma0*Context.Response.camber_scale;
     //: **MODE 0 MEANS CAMBER DOES NOTHING, and the THRUST is camber too** (Previs, 2026-09-10). The
