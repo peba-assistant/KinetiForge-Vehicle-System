@@ -494,4 +494,12 @@ struct FVehicleLimitedSlipDifferentialConfig
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Setup")
 	bool bOneWayCoupling = false;
+	/* SECONDARY SPEED SCALE (Previs, 2026-09-29; AWAITING FABLE REVIEW; VD's review MED of the commanded clutch): the
+	* coupling compares w_primary - scale x w_secondary. A controller that reads ROAD speeds (a PTM or Haldex unit) sets
+	* scale = (r_secondary / r_primary) x (FD_primary / FD_secondary), so equal road speeds read zero and a pre-engaged
+	* clutch clamps from zero slip; with unequal tyres at 1.0 the smaller-tyred axle's shaft runs ahead and a one-way
+	* clutch freewheels until the slip overtakes the mismatch. 1.0 = the plain propshaft comparison (the default).
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Setup", meta = (ClampMin = "0.5", ClampMax = "2.0"))
+	float CouplingSecondarySpeedScale = 1.f;
 };

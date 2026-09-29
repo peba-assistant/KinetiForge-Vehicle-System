@@ -153,21 +153,29 @@ int32 UVehicleDifferentialComponent::SubstepTransferCase(
 		}
 		if (NumOfSecondaryAxles > 0 && PrimaryInertia > SMALL_NUMBER && SecondaryInertia > SMALL_NUMBER)
 		{
+			//: the secondary's speed scaled to the primary's road frame (1 = the plain propshaft comparison)
+			const float SecondaryScale = FMath::Clamp(Config.CouplingSecondarySpeedScale, 0.5f, 2.f);
 			const float SpeedDifference = UVehicleUtilities::SafeDivide(PrimaryMomentum, PrimaryInertia)
-				- UVehicleUtilities::SafeDivide(SecondaryMomentum, SecondaryInertia);
+				- SecondaryScale * UVehicleUtilities::SafeDivide(SecondaryMomentum, SecondaryInertia);
 			const float MaxTorque = FMath::Max(Config.CouplingMaxTorque, 0.f);
 			CouplingTorque = FMath::Clamp(FMath::Max(Config.CouplingRampTorque, 0.f) * SpeedDifference, -MaxTorque, MaxTorque);
+			//: the torque that closes the (scaled) difference this substep: d(dw)/dt = D/Ip - T/Ip - scale x T/Is. The
+			//: primary's own drive D spreads the shafts during the substep, so a closed clutch must carry it too (Previs
+			//: 2026-09-29: without it a pre-engaged clutch moved only the difference present at the step start, ~47 N.m on
+			//: the 911's launch, and the rear ran 10 % ahead of a front that should have been clamped to it)
+			const float PrimaryDrive = DriveTorque;  //: every weight is on the primaries in this mode
+			const float EqualisingTorque = (UVehicleUtilities::SafeDivide(SpeedDifference, InSubstepDeltaTime)
+				+ UVehicleUtilities::SafeDivide(PrimaryDrive, PrimaryInertia))
+				* PrimaryInertia * SecondaryInertia / (SecondaryInertia + SecondaryScale * PrimaryInertia);
+			if (FMath::Abs(CouplingTorque) > FMath::Abs(EqualisingTorque))
+			{
+				CouplingTorque = EqualisingTorque;
+			}
 			//: one-way: only while the primary runs ahead in its own direction of rotation (it drives, never brakes, the secondary)
 			const float PrimarySpeed = UVehicleUtilities::SafeDivide(PrimaryMomentum, PrimaryInertia);
 			if (Config.bOneWayCoupling && CouplingTorque * PrimarySpeed <= 0.f)
 			{
 				CouplingTorque = 0.f;
-			}
-			const float EqualisingTorque = UVehicleUtilities::SafeDivide(
-				SpeedDifference * PrimaryInertia * SecondaryInertia / (PrimaryInertia + SecondaryInertia), InSubstepDeltaTime);
-			if (FMath::Abs(CouplingTorque) > FMath::Abs(EqualisingTorque))
-			{
-				CouplingTorque = EqualisingTorque;
 			}
 		}
 	}
