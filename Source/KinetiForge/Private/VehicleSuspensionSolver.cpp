@@ -1815,7 +1815,13 @@ void FVehicleSuspensionSolver::ComputeSolidAxle(
 
 	// 6. 组合 Hub 旋转
 	FQuat4f HubChassisRot = SteeringBiasRotation * AxleChassisRotation;
-	Ctx.HubChassisTransform.SetRotation(HubChassisRot);
+	// Previs 2026-09-30 (AWAITING FABLE REVIEW; Granddaddy Fable's ruling on the owner's Retro camber check): a beam
+	// axle's wheels carry the camber and toe built into its knuckles and axle ends (the Samurai's +1 deg is in its
+	// knuckles), and upstream's hub was the bare axle, so every declared solid-axle alignment was dropped. The spindle
+	// seat turns the WHEEL only - the hub still sits where the axle end puts it. It is the WHOLE seat, pitch included,
+	// so a level axle's wheel is exactly the straight-line corner the adapter solves the seat against.
+	const FQuat4f SolidAxleSeat = GetSpindleMountQuat(Config.StaticSpindleRotation, Ctx.WheelSideSign);
+	Ctx.HubChassisTransform.SetRotation((HubChassisRot * SolidAxleSeat).GetNormalized());
 
 	// 7. 偏移到轮心
 	FVector3f HubOffset = Config.HubOffsetFromLowerJoint;
