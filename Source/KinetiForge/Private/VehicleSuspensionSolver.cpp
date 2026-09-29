@@ -1,3 +1,4 @@
+// AWAITING FABLE REVIEW (Granddaddy Fable) - changed 2026-09-30 by Fable 5.1 (the unsprung construct, owner order via Granddaddy): UpdateStrutLength takes UnsprungMassKg as the corner's whole unsprung mass (0 = massless, the kinematic branch; < 0 upstream's law), epsilon 1 g on the division only.
 // AWAITING FABLE REVIEW - changed 2026-09-10 by Opus 5 (CLAUDE.local.md section 1, ADR-041): the unsprung integrator damping cm conversion (Codex F2).
 // Copyright (c) 2026 Zhengyi Miao (github.com/myoozy)
 
@@ -1065,7 +1066,14 @@ void FVehicleSuspensionSolver::UpdateStrutLength(
 	const float MacroDtInv = UVehicleUtilities::SafeDivide(1.f, Ctx.PhysicsDeltaTime);
 	const float RayStrutVelocity = (StrutLengthLimit - LastStrutLengthLimit) * MacroDtInv;
 
-	bool bSimulateUnsprungMass = KineConfig.SuspensionAndBrakeMass > SMALL_NUMBER;
+	//: Previs 2026-09-30 (the unsprung construct): UnsprungMassKg >= 0 is the WHOLE unsprung mass of this
+	//: corner as the vehicle states it (wheel and tyre included), so the 2I/r^2 wheel below is not added to
+	//: it; exactly 0 is a massless wheel and takes the kinematic branch; < 0 keeps upstream's law. The
+	//: epsilon guards the division only - a stated 0 never reaches it.
+	const bool bWholeMassStated = KineConfig.UnsprungMassKg >= 0.f;
+	bool bSimulateUnsprungMass = bWholeMassStated
+		? KineConfig.UnsprungMassKg > kUnsprungMassEpsilonKg
+		: KineConfig.SuspensionAndBrakeMass > SMALL_NUMBER;
 	if (bSimulateUnsprungMass)
 	{
 		const float m_to_cm = 100.f;
@@ -1078,8 +1086,8 @@ void FVehicleSuspensionSolver::UpdateStrutLength(
 
 		// integrate unsprung mass position
 		const float EstimatedWheelMass = UVehicleUtilities::SafeDivide(2.0f * WheelInertia, WheelRadius * WheelRadius * 0.0001f); // cm to m
-		Ctx.VirtualUnsprungMass = EstimatedWheelMass + KineConfig.SuspensionAndBrakeMass;
-		const float VirtualUnsprungMassInv = UVehicleUtilities::SafeDivide(1.f, Ctx.VirtualUnsprungMass);
+		Ctx.VirtualUnsprungMass = bWholeMassStated ? KineConfig.UnsprungMassKg : EstimatedWheelMass + KineConfig.SuspensionAndBrakeMass;
+		const float VirtualUnsprungMassInv = 1.f / FMath::Max(Ctx.VirtualUnsprungMass, kUnsprungMassEpsilonKg);
 		Ctx.StrutWorldDirection = Ctx.ChassisWorldTransform.TransformVectorNoScale((FVector)Ctx.StrutChassisDirection);
 		const float GravityForce = Ctx.VirtualUnsprungMass * WorldGravityZ * Ctx.StrutWorldDirection.Z;
 

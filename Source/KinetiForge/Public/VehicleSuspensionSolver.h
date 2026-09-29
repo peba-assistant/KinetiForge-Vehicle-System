@@ -237,6 +237,8 @@ private:
 		const float WheelRadius,
 		const float EquivalentSphereTraceRadius
 	);
+public:
+	//: Previs 2026-09-30: public so a headless test can step one corner's unsprung mass (PrevisUnsprungMassTests).
 	static void UpdateStrutLength(
 		FVehicleSuspensionSimContext& Ctx,
 		const FVehicleChassisSimState& ChassisState,
@@ -249,6 +251,8 @@ private:
 		const float ActiveSwaybarStiffness,
 		const float OtherHubChassisZ
 	);
+	static constexpr float kUnsprungMassEpsilonKg = 0.001f;
+private:
 	static void CacheImpactFriction(
 		FVehicleSuspensionSimContext& Ctx
 	);

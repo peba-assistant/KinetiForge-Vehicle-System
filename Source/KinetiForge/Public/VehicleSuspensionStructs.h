@@ -138,6 +138,18 @@ struct KINETIFORGE_API FVehicleSuspensionKinematicsConfig
 	float SuspensionAndBrakeMass = 20.f;
 
 	/**
+	* Previs 2026-09-30 (the unsprung construct, docs/code reference/physics/unsprung-mass-construct-2026-09-30.md):
+	* the WHOLE unsprung mass of this corner in kg - wheel, tyre, hub, brake and the moving share of the arms -
+	* as the vehicle states it per wheel. >= 0 replaces SuspensionAndBrakeMass + the 2I/r^2 wheel the solver
+	* back-derives from WheelConfig.Inertia; exactly 0 is a MASSLESS wheel (the kinematic strut: length = the
+	* ground's, no integrator, the same branch SuspensionAndBrakeMass <= 0 takes). < 0 (the default) keeps
+	* upstream's law untouched. The integrator divides by max(mass, kUnsprungMassEpsilonKg) = 1 g, declared
+	* in VehicleSuspensionSolver.cpp - never a hidden default mass.
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float UnsprungMassKg = -1.f;
+
+	/**
 	* X: SuspensionCompressionRatio; Y:CamberGain; Only enabled when the suspension type is double-wishbone
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
