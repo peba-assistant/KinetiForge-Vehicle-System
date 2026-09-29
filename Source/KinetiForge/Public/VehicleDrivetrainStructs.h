@@ -65,6 +65,16 @@ struct KINETIFORGE_API FVehicleNaturallyAspiratedEngineConfig
 	float RevLimiterTime = 0.05f;
 
 	/**
+	* Previs 2026-09-30 (AWAITING FABLE REVIEW; the owner's throttle balance, Granddaddy Fable's approval): a drive-by-wire
+	* car's PEDAL MAP - pedal (x, 0..1) to the throttle the engine is given (y, 0..1), piecewise linear, sorted by x.
+	* A torque-demand ECU opens the throttle so the torque follows the pedal; without it a turbo car's pedal answers
+	* throttle x boost(throttle), which puts most of the torque in the top half of the travel. Empty = the pedal IS the
+	* throttle (every car before this existed, and every mechanical-throttle car).
+	*/
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "EngineSetup", meta = (AdvancedDisplay))
+	TArray<FVector2f> PedalToThrottle;
+
+	/**
 	* If Lambda < 1.f, there will be unburnt fuel, which will cause back fireing
 	*/
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "EngineSetup", meta = (ClampMin = "0.0", AdvancedDisplay))

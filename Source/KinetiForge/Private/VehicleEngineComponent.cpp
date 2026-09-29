@@ -421,6 +421,24 @@ void UVehicleEngineComponent::UpdatePhysics(float InDeltaTime, float InThrottle,
 	TRACE_CPUPROFILER_EVENT_SCOPE(KinetiForgeVehicle_Engine_UpdatePhysics);
 
 	State.RawThrottleInput = FMath::Clamp(InThrottle, 0.f, 1.f);
+	// Previs 2026-09-30 (AWAITING FABLE REVIEW): a drive-by-wire car's pedal map (FVehicleNaturallyAspiratedEngineConfig::
+	// PedalToThrottle); the controllers that read the pedal (the clutch command, traction control) keep reading the pedal.
+	if (NAConfig.PedalToThrottle.Num() >= 2)
+	{
+		const TArray<FVector2f>& Map = NAConfig.PedalToThrottle;
+		const float Pedal = State.RawThrottleInput;
+		float Throttle = Pedal <= Map[0].X ? Map[0].Y : Map.Last().Y;
+		for (int32 i = 1; i < Map.Num(); ++i)
+		{
+			if (Pedal <= Map[i].X)
+			{
+				const float Span = FMath::Max(Map[i].X - Map[i - 1].X, SMALL_NUMBER);
+				Throttle = FMath::Lerp(Map[i - 1].Y, Map[i].Y, FMath::Clamp((Pedal - Map[i - 1].X) / Span, 0.f, 1.f));
+				break;
+			}
+		}
+		State.RawThrottleInput = FMath::Clamp(Throttle, 0.f, 1.f);
+	}
 	State.LoadTorque = InLoadTorque;
 
 	// get torque required to start engine
