@@ -647,7 +647,13 @@ FVector2f FVehicleWheelSolver::SolveTireForce(
     const auto Y=[&](double r) { const double base=double(TireLUTs.Fy.FastEval(r*TireLUTs.Fy.PeakFriction/FMath::Max(TireLUTs.Fy.OriginSlope,SMALL_NUMBER)).Value)/FMath::Max(TireLUTs.Fy.PeakFriction,SMALL_NUMBER);
         const double peak=(TireLUTs.Fy.OptimalSlipIndex/1023.)*TireLUTs.Fy.OriginSlope/FMath::Max(TireLUTs.Fy.PeakFriction,SMALL_NUMBER);
         return tr::slide_tail(base,r,peak,TireConfig.ResponseProfile.slide_assistance); };
-    const auto F=tr::force(Dx,Dy,Context.ForceStiffness.X,Context.ForceStiffness.Y,{Slip.X,Slip.Y*(PI/2)},X,Y);
+    //: COMBINED SLIP (Previs 2026-09-30, AWAITING FABLE REVIEW): `previs.tire.combined` 1 reads each pure curve at its OWN
+    //: slip under Pacejka's weighting (tire_response.hpp force_combined); 0 (the default until the owner has driven it) keeps
+    //: the similarity law, both curves at the one combined slip.
+    static const auto* const CombinedMode=IConsoleManager::Get().FindConsoleVariable(TEXT("previs.tire.combined"));
+    const auto F=(CombinedMode!=nullptr && CombinedMode->GetInt()!=0)
+        ? tr::force_combined(Dx,Dy,Context.ForceStiffness.X,Context.ForceStiffness.Y,{Slip.X,Slip.Y*(PI/2)},X,Y,TireConfig.ResponseProfile)
+        : tr::force(Dx,Dy,Context.ForceStiffness.X,Context.ForceStiffness.Y,{Slip.X,Slip.Y*(PI/2)},X,Y);
     LocalState.TargetForce=FVector2f(F.x,F.y);
     const double dt=Context.SubstepDeltaTime, mx=FMath::Max(EffectiveSprungMassLong,1.f),my=FMath::Max(EffectiveSprungMassLat,1.f);
     const double jx=Context.R,jy=Context.R*FMath::Sign(LocalState.AngularVelocity)*Context.CamberLateralDrift;
