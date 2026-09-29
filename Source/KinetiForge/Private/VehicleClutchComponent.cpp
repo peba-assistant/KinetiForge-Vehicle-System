@@ -97,7 +97,9 @@ float UVehicleClutchComponent::GetTorqueSpringModel(
 	if (!State.bSlipping && FMath::Abs(SpringModelTorque) > StaticCapacity)
 	{
 		State.bSlipping = true;
-		State.SlipSign = ClutchSlip != 0.f ? FMath::Sign(ClutchSlip) : FMath::Sign(SpringModelTorque);
+		// Previs 2026-09-29 (Fable review, LOW 2): the sign of the torque that broke the stick, which the slip may not
+		// share on that step; the slip's sign only when that torque is zero
+		State.SlipSign = SpringModelTorque != 0.f ? FMath::Sign(SpringModelTorque) : FMath::Sign(ClutchSlip);
 		SpringModelTorque = FMath::Sign(SpringModelTorque) * StaticCapacity;  // the breakaway step carries the static peak
 		State.AngleDiff = UVehicleUtilities::SafeDivide(SpringModelTorque * TorqueDenominator, K_Series);
 		return State.ClutchTorque = SpringModelTorque;
