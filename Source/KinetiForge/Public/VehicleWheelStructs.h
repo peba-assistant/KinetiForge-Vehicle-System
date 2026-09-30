@@ -355,6 +355,10 @@ struct KINETIFORGE_API FVehicleWheelSimState
 	bool bIsLocked = false;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Electronics")
 	bool bABSTriggered = false;
+	// Previs 2026-09-30 (AWAITING FABLE REVIEW): the ABS PI regulator's per-wheel state (previs.abs.law 1)
+	float AbsIntegrator = 1.f;  // u_i, the integrated brake fraction (reset to 1 when the pedal is off or the ABS inactive)
+	float AbsFraction = 1.f;    // u, the brake fraction applied this substep
+	float AbsTarget = 0.f;      // the slip target: the tyre curve's own peak slip + previs.abs.margin
 };
 
 USTRUCT(BlueprintType, meta = (ToolTip = ""))

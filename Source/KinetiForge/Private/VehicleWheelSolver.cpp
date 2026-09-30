@@ -400,6 +400,35 @@ void FVehicleWheelSolver::PredictSlipAndUpdateABS(
 	// only activate abs when the sign of slip and the sign of velocity is different
 	bool bDifferentSign = LocalState.PredictedSlipRatio * LocalState.LocalLinearVelocity.X < 0.f;
 
+	// Previs 2026-09-30 (AWAITING FABLE REVIEW; Granddaddy Fable's approved design): `previs.abs.law` 1 regulates the slip with a
+	// per-wheel PI instead of the proportional law below, whose droop held the E30's fronts at 0.23-0.25 slip against a
+	// curve peak near 0.10 (a real ABS cycles about the peak). Target = the curve's own peak slip (OptimalSlip is the
+	// adaptive EffectivePeakSlipRatio here) + `previs.abs.margin`; Kp is the config's Sensitivity, Ki `previs.abs.ki`.
+	// The integrator resets to full brake whenever the pedal is off or the ABS is not active. 0 = the law below.
+	static const auto* const AbsLaw = IConsoleManager::Get().FindConsoleVariable(TEXT("previs.abs.law"));
+	if (AbsLaw != nullptr && AbsLaw->GetInt() != 0)
+	{
+		static const auto* const AbsMargin = IConsoleManager::Get().FindConsoleVariable(TEXT("previs.abs.margin"));
+		static const auto* const AbsKi = IConsoleManager::Get().FindConsoleVariable(TEXT("previs.abs.ki"));
+		const bool bRegulating = ABSConfig.bAntiBrakeSystemEnabled && TargetBrakeTorque > SMALL_NUMBER && bOnGround
+			&& FMath::Abs(LocalState.LocalLinearVelocity.X) > ABSConfig.ActivationSpeed;
+		if (!bRegulating)
+		{
+			LocalState.AbsIntegrator = 1.f;
+			LocalState.AbsFraction = 1.f;
+			LocalState.bABSTriggered = false;
+			LocalState.BrakeTorqueFromBrake = TargetBrakeTorque;
+			return;
+		}
+		LocalState.AbsTarget = ABSConfig.OptimalSlip + (AbsMargin != nullptr ? AbsMargin->GetFloat() : 0.02f);
+		const float SlipError = (bDifferentSign ? AbsolutSlip : 0.f) - LocalState.AbsTarget;  //: a wheel not locking reads no slip
+		LocalState.AbsFraction = AbsPiStep(LocalState.AbsIntegrator, SlipError, ABSConfig.Sensitivity,
+		                                   AbsKi != nullptr ? AbsKi->GetFloat() : 80.f, Context.SubstepDeltaTime);
+		LocalState.bABSTriggered = LocalState.AbsFraction < 0.999f;
+		LocalState.BrakeTorqueFromBrake = TargetBrakeTorque * LocalState.AbsFraction;
+		return;
+	}
+
 	LocalState.bABSTriggered = 
 		ABSConfig.bAntiBrakeSystemEnabled
 		&& TargetBrakeTorque > SMALL_NUMBER

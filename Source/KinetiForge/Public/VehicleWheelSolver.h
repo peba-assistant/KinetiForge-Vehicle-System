@@ -62,6 +62,14 @@ public:
 	FVehicleWheelSimContext CurrentContext;
 	FVehicleWheelCachedLUTs CachedLUTs;
 
+	// Previs 2026-09-30 (AWAITING FABLE REVIEW): one PI step of the ABS on the slip error e = |slip| - target; the integrator
+	// is clamped to [0, 1] (anti-windup) and the returned brake fraction u is the integrator less Kp e, clamped to [0, 1].
+	static float AbsPiStep(float& Integrator, const float SlipError, const float Kp, const float Ki, const float Dt)
+	{
+		Integrator = FMath::Clamp(Integrator - Ki * SlipError * Dt, 0.f, 1.f);
+		return FMath::Clamp(Integrator - Kp * SlipError, 0.f, 1.f);
+	}
+
 protected:
 
 private:
