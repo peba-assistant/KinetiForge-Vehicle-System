@@ -65,7 +65,7 @@ struct KINETIFORGE_API FVehicleNaturallyAspiratedEngineConfig
 	float RevLimiterTime = 0.05f;
 
 	/**
-	* Previs 2026-09-30 (AWAITING FABLE REVIEW; the owner's throttle balance, Granddaddy Fable's approval): a drive-by-wire
+	* Previs 2026-09-30 (Fable-reviewed 2026-09-30 (8199f7a PASS); the owner's throttle balance, Granddaddy Fable's approval): a drive-by-wire
 	* car's PEDAL MAP - pedal (x, 0..1) to the throttle the engine is given (y, 0..1), piecewise linear, sorted by x.
 	* A torque-demand ECU opens the throttle so the torque follows the pedal; without it a turbo car's pedal answers
 	* throttle x boost(throttle), which puts most of the torque in the top half of the travel. Empty = the pedal IS the

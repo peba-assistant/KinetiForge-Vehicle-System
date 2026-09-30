@@ -421,7 +421,7 @@ void UVehicleEngineComponent::UpdatePhysics(float InDeltaTime, float InThrottle,
 	TRACE_CPUPROFILER_EVENT_SCOPE(KinetiForgeVehicle_Engine_UpdatePhysics);
 
 	State.RawThrottleInput = FMath::Clamp(InThrottle, 0.f, 1.f);
-	// Previs 2026-09-30 (AWAITING FABLE REVIEW): a drive-by-wire car's pedal map (FVehicleNaturallyAspiratedEngineConfig::
+	// Previs 2026-09-30 (Fable-reviewed 2026-09-30 (8199f7a PASS)): a drive-by-wire car's pedal map (FVehicleNaturallyAspiratedEngineConfig::
 	// PedalToThrottle); the controllers that read the pedal (the clutch command, traction control) keep reading the pedal.
 	if (NAConfig.PedalToThrottle.Num() >= 2)
 	{

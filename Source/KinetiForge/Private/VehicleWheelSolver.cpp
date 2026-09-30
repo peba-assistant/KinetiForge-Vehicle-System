@@ -113,7 +113,7 @@ void FVehicleWheelSolver::PreStep(
     //: knob of the tyre section and not this one, so every Assetto car cornered at 100 km/h with the grip
     //: it has at walking pace: about 5 % over at 50 km/h, 11 % at 108 on a 0.0036 tyre. Clamped at 0.3
     //: so a stated coefficient can never zero a tyre at speed.
-    //: (Previs 2026-09-30, AWAITING FABLE REVIEW; Granddaddy Fable's approved design) `previs.tire.slip_speed_decay` 1
+    //: (Previs 2026-09-30, Fable-reviewed 2026-09-30 (027556e PASS); Granddaddy Fable's approved design) `previs.tire.slip_speed_decay` 1
     //: moves the decay onto the SLIP speed (Burckhardt's measured dry law), applied below once the peak slip is known;
     //: 0 (the default until the E30/F40 skidpad before/after) keeps this travel-speed form exactly.
     static const auto* const SlipSpeedDecay =
@@ -131,7 +131,7 @@ void FVehicleWheelSolver::PreStep(
     Context.ForceStiffness=FVector2f(
         Grip(TireConfig.FrictionMultiplier,TireConfig.LoadForceRatioAtDoubleLoadLong,LocalState.WheelLoad)*TireConfig.MaxFx*CachedLUTs.Fx.OriginSlope*Context.Response.stiffness_x,
         Grip(TireConfig.FrictionMultiplier,TireConfig.LoadForceRatioAtDoubleLoadLat,LocalState.WheelLoad)*TireConfig.MaxFy*CachedLUTs.Fy.OriginSlope/(PI/2)*Context.Response.stiffness_y);
-    //: PEAK SLIP MOVES WITH LOAD (Previs 2026-09-30, AWAITING FABLE REVIEW): the peak force and the stiffness above carry
+    //: PEAK SLIP MOVES WITH LOAD (Previs 2026-09-30, Fable-reviewed 2026-09-30 (027556e PASS)): the peak force and the stiffness above carry
     //: the same load factor, so their ratio - the peak slip - never moved with load. The stiffness alone takes
     //: l^-q (q/2 below the reference load; tire_response.hpp), the peak stays: alpha_pk = alpha_pk0 l^q. q 0 = today.
     Context.ForceStiffness.X*=float(previs::tire::response::peak_slip_stiffness_scale(P.peak_slip_load_power_x,LocalState.WheelLoad,P.reference_load));

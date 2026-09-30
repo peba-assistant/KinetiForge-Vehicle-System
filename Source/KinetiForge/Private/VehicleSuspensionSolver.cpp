@@ -1815,7 +1815,7 @@ void FVehicleSuspensionSolver::ComputeSolidAxle(
 
 	// 6. ×éºÏ Hub Ðý×ª
 	FQuat4f HubChassisRot = SteeringBiasRotation * AxleChassisRotation;
-	// Previs 2026-09-30 (AWAITING FABLE REVIEW; Granddaddy Fable's ruling on the owner's Retro camber check): a beam
+	// Previs 2026-09-30 (Fable-reviewed 2026-09-30 (90869f0 PASS); Granddaddy Fable's ruling on the owner's Retro camber check): a beam
 	// axle's wheels carry the camber and toe built into its knuckles and axle ends (the Samurai's +1 deg is in its
 	// knuckles), and upstream's hub was the bare axle, so every declared solid-axle alignment was dropped. The spindle
 	// seat turns the WHEEL only - the hub still sits where the axle end puts it. It is the WHOLE seat, pitch included,
